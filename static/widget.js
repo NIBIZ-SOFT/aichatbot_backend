@@ -1,0 +1,978 @@
+/**
+ * Enterprise AIaaS Chatbot Widget
+ * Version: 2.2.0
+ * Features: 
+ * - Bidirectional AI Pause / Resume Controller (Visitor & Platform Owner / Human Agent)
+ * - 1-Click "Talk to Human" / "Switch to AI" Switcher with Real-time WebSocket Sync
+ * - Pre-Chat Lead Capture Form (Full Name & Phone/Email) for Real CRM Tracking
+ * - Official 'marked.js' Open Source Markdown Engine (GFM tables, code blocks, lists, bold)
+ * - Native OpenAI SDK & Gemini Web2API backend
+ * - Shadow DOM Encapsulated & Anti-Duplication Cache
+ */
+(function (window, document) {
+  "use strict";
+
+  if (window.EnterpriseChatWidget) {
+    return;
+  }
+
+  // --- Dynamic Loader for Official Open-Source 'marked.js' Engine ---
+  function loadMarkedLibrary(apiUrl, callback) {
+    if (window.marked && typeof window.marked.parse === "function") {
+      callback(window.marked);
+      return;
+    }
+
+    var localUrl = apiUrl.replace(/\/api\/v1\/?$/, "") + "/static/marked.min.js";
+    var cdnUrl = "https://cdn.jsdelivr.net/npm/marked/marked.min.js";
+
+    var script = document.createElement("script");
+    script.src = localUrl;
+    script.async = true;
+    script.onload = function () {
+      if (window.marked) {
+        if (typeof window.marked.setOptions === "function") {
+          window.marked.setOptions({ breaks: true, gfm: true });
+        }
+        callback(window.marked);
+      }
+    };
+    script.onerror = function () {
+      var cdnScript = document.createElement("script");
+      cdnScript.src = cdnUrl;
+      cdnScript.async = true;
+      cdnScript.onload = function () {
+        if (window.marked) {
+          callback(window.marked);
+        }
+      };
+      document.head.appendChild(cdnScript);
+    };
+    document.head.appendChild(script);
+  }
+
+  // Pure Fallback Markdown Parser
+  function fallbackParseMarkdown(md) {
+    if (!md) return "";
+    var text = md
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    text = text.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, '<pre class="aiaas-pre"><code>$2</code></pre>');
+    text = text.replace(/`([^`]+)`/g, '<code class="aiaas-inline-code">$1</code>');
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    text = text.replace(/^[\*\-] (.*$)/gim, '<li class="aiaas-li">$1</li>');
+    text = text.replace(/(<li class="aiaas-li">[\s\S]*?<\/li>)/g, '<ul class="aiaas-ul">$1</ul>');
+    text = text.replace(/\n\n+/g, '</p><p class="aiaas-p">');
+    text = text.replace(/\n/g, '<br/>');
+    return '<p class="aiaas-p">' + text + '</p>';
+  }
+
+  function renderMarkdown(md) {
+    if (!md) return "";
+    if (window.marked && typeof window.marked.parse === "function") {
+      try {
+        return window.marked.parse(md, { breaks: true, gfm: true });
+      } catch (e) {
+        console.error("Marked parse error:", e);
+      }
+    }
+    return fallbackParseMarkdown(md);
+  }
+
+  function createWidget(config) {
+    var widgetKey = config.widgetKey;
+    var apiUrl = config.apiUrl || "http://127.0.0.1:8000/api/v1";
+    var primaryColor = config.primaryColor || "#4F46E5";
+    var position = config.position || "bottom-right";
+
+    // Pre-Chat Lead Info
+    var visitorName = localStorage.getItem("aiaas_vis_name_" + widgetKey) || "";
+    var visitorContact = localStorage.getItem("aiaas_vis_contact_" + widgetKey) || "";
+
+    var conversationId = null;
+    var visitorSessionId = localStorage.getItem("aiaas_vis_sess_" + widgetKey);
+    if (!visitorSessionId) {
+      visitorSessionId = "vis_" + Math.random().toString(36).substring(2, 12);
+      localStorage.setItem("aiaas_vis_sess_" + widgetKey, visitorSessionId);
+    }
+
+    var isOpen = false;
+    var isTyping = false;
+    var isAiPaused = false;
+    var socket = null;
+    var isWsConnected = false;
+    var recentMessages = []; // Anti-duplication cache
+
+    var widgetConfig = {
+      header_title: config.headerTitle || "Live Support",
+      welcome_message: "Hello! How can we assist you today?",
+      primary_color: primaryColor
+    };
+
+    // Root host element
+    var host = document.createElement("div");
+    host.id = "aiaas-widget-host";
+    document.body.appendChild(host);
+
+    // Shadow DOM for complete CSS encapsulation
+    var shadow = host.attachShadow ? host.attachShadow({ mode: "open" }) : host;
+
+    // Inject Modern Styles
+    var style = document.createElement("style");
+    style.textContent = `
+      * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
+      
+      .aiaas-launcher {
+        position: fixed;
+        bottom: 24px;
+        ${position === "bottom-left" ? "left: 24px;" : "right: 24px;"}
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: ${primaryColor};
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+        z-index: 9999999;
+        transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+        border: none;
+        outline: none;
+      }
+      .aiaas-launcher:hover {
+        transform: scale(1.08);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+      }
+      .aiaas-launcher svg {
+        width: 28px;
+        height: 28px;
+        fill: currentColor;
+        transition: transform 0.2s ease;
+      }
+
+      .aiaas-badge {
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        width: 14px;
+        height: 14px;
+        background: #10B981;
+        border: 2px solid #ffffff;
+        border-radius: 50%;
+      }
+
+      .aiaas-window {
+        position: fixed;
+        bottom: 96px;
+        ${position === "bottom-left" ? "left: 24px;" : "right: 24px;"}
+        width: 420px;
+        max-width: calc(100vw - 40px);
+        height: 600px;
+        max-height: calc(100vh - 120px);
+        background: #ffffff;
+        border-radius: 20px;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        z-index: 9999999;
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+        pointer-events: none;
+        transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+      }
+
+      .aiaas-window.open {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+      }
+
+      .aiaas-header {
+        padding: 14px 18px;
+        background: ${primaryColor};
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      }
+
+      .aiaas-header-title {
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: -0.2px;
+      }
+
+      .aiaas-header-status {
+        font-size: 11px;
+        opacity: 0.9;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 2px;
+      }
+
+      .aiaas-status-dot {
+        width: 7px;
+        height: 7px;
+        background: #34D399;
+        border-radius: 50%;
+        display: inline-block;
+      }
+
+      .aiaas-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .aiaas-handover-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        color: #ffffff;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s, transform 0.1s;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        outline: none;
+      }
+      .aiaas-handover-btn:hover {
+        background: rgba(255, 255, 255, 0.35);
+        transform: scale(1.02);
+      }
+
+      .aiaas-close-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: #ffffff;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s;
+      }
+      .aiaas-close-btn:hover {
+        background: rgba(255, 255, 255, 0.35);
+      }
+
+      /* Pre-Chat Lead Capture Form */
+      .aiaas-prechat {
+        flex: 1;
+        padding: 24px;
+        background: #F8FAFC;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 16px;
+      }
+      .aiaas-prechat-badge {
+        font-size: 11px;
+        font-weight: 700;
+        color: ${primaryColor};
+        background: rgba(79, 70, 229, 0.08);
+        padding: 4px 10px;
+        border-radius: 20px;
+        width: fit-content;
+      }
+      .aiaas-prechat-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: #0F172A;
+        letter-spacing: -0.3px;
+      }
+      .aiaas-prechat-sub {
+        font-size: 12px;
+        color: #64748B;
+        line-height: 1.4;
+      }
+      .aiaas-field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .aiaas-field label {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #334155;
+      }
+      .aiaas-field input {
+        width: 100%;
+        padding: 10px 14px;
+        border-radius: 12px;
+        border: 1px solid #CBD5E1;
+        font-size: 13px;
+        background: #ffffff;
+        outline: none;
+        transition: border 0.2s;
+      }
+      .aiaas-field input:focus {
+        border-color: ${primaryColor};
+      }
+      .aiaas-start-btn {
+        margin-top: 6px;
+        padding: 12px;
+        background: ${primaryColor};
+        color: #ffffff;
+        border: none;
+        border-radius: 14px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: opacity 0.2s, transform 0.1s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+      .aiaas-start-btn:hover {
+        opacity: 0.92;
+        transform: translateY(-1px);
+      }
+
+      .aiaas-messages {
+        flex: 1;
+        padding: 18px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        background: #F8FAFC;
+      }
+
+      .aiaas-msg {
+        max-width: 90%;
+        padding: 12px 16px;
+        font-size: 13.5px;
+        line-height: 1.55;
+        border-radius: 16px;
+        word-wrap: break-word;
+        animation: aiaasFadeIn 0.2s ease;
+      }
+
+      @keyframes aiaasFadeIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .aiaas-msg.visitor {
+        align-self: flex-end;
+        background: ${primaryColor};
+        color: #ffffff;
+        border-bottom-right-radius: 4px;
+      }
+
+      .aiaas-msg.ai {
+        align-self: flex-start;
+        background: #ffffff;
+        color: #1E293B;
+        border: 1px solid #E2E8F0;
+        border-bottom-left-radius: 4px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+      }
+
+      .aiaas-msg.agent {
+        align-self: flex-start;
+        background: #EEF2FF;
+        color: #312E81;
+        border: 1px solid #C7D2FE;
+        border-bottom-left-radius: 4px;
+      }
+
+      .aiaas-msg.system {
+        align-self: center;
+        background: #FEF3C7;
+        color: #92400E;
+        font-size: 11.5px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 1px solid #FDE68A;
+      }
+
+      .aiaas-msg-author {
+        font-size: 10.5px;
+        font-weight: 700;
+        margin-bottom: 5px;
+        color: ${primaryColor};
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .aiaas-msg-meta {
+        font-size: 10px;
+        margin-top: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 3px;
+        line-height: 1;
+        opacity: 0.82;
+      }
+      .aiaas-msg.visitor .aiaas-msg-meta {
+        color: rgba(255, 255, 255, 0.88);
+      }
+      .aiaas-msg.ai .aiaas-msg-meta {
+        color: #94A3B8;
+      }
+      .aiaas-msg.agent .aiaas-msg-meta {
+        color: #6366F1;
+      }
+      .aiaas-msg-check {
+        font-size: 10px;
+        color: #A7F3D0;
+        font-weight: 700;
+        margin-left: 2px;
+      }
+
+      /* Pure Open-Source Markdown (marked.js) Typography Styles */
+      .aiaas-msg-body p { margin: 0 0 8px 0; }
+      .aiaas-msg-body p:last-child { margin-bottom: 0; }
+      .aiaas-msg-body strong { font-weight: 700; color: inherit; }
+      .aiaas-msg-body em { font-style: italic; }
+      .aiaas-msg-body h1, .aiaas-msg-body h2, .aiaas-msg-body h3, .aiaas-msg-body h4 {
+        font-weight: 750;
+        margin: 10px 0 6px 0;
+        line-height: 1.3;
+        color: inherit;
+      }
+      .aiaas-msg-body h1 { font-size: 16px; }
+      .aiaas-msg-body h2 { font-size: 15px; }
+      .aiaas-msg-body h3 { font-size: 14px; }
+      .aiaas-msg-body h4 { font-size: 13.5px; }
+
+      .aiaas-msg-body ul, .aiaas-msg-body ol { margin: 6px 0 8px 18px; padding: 0; }
+      .aiaas-msg-body li { margin-bottom: 4px; line-height: 1.45; }
+
+      .aiaas-msg-body blockquote {
+        border-left: 3px solid ${primaryColor};
+        padding: 4px 0 4px 10px;
+        margin: 8px 0;
+        color: #64748B;
+        background: rgba(0,0,0,0.02);
+        border-radius: 0 6px 6px 0;
+      }
+
+      .aiaas-msg-body a { color: #4F46E5; text-decoration: underline; font-weight: 600; }
+      .aiaas-msg-body code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+        background: #F1F5F9;
+        color: #0F172A;
+        padding: 2px 6px;
+        border-radius: 6px;
+        border: 1px solid #E2E8F0;
+      }
+      .aiaas-msg.visitor code {
+        background: rgba(255, 255, 255, 0.2);
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+
+      .aiaas-msg-body pre {
+        margin: 8px 0;
+        border-radius: 10px;
+        overflow-x: auto;
+        background: #0F172A;
+        color: #E2E8F0;
+        padding: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.45;
+        border: 1px solid #1E293B;
+      }
+      .aiaas-msg-body pre code { background: transparent; color: inherit; border: none; padding: 0; }
+
+      /* Markdown Tables */
+      .aiaas-msg-body table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+      .aiaas-msg-body th, .aiaas-msg-body td { border: 1px solid #E2E8F0; padding: 6px 10px; text-align: left; }
+      .aiaas-msg-body th { background: #F8FAFC; font-weight: 700; }
+
+      .aiaas-typing {
+        display: flex;
+        gap: 4px;
+        padding: 10px 14px;
+        background: #ffffff;
+        border: 1px solid #E2E8F0;
+        border-radius: 16px;
+        width: fit-content;
+        align-self: flex-start;
+      }
+
+      .aiaas-dot {
+        width: 6px;
+        height: 6px;
+        background: #94A3B8;
+        border-radius: 50%;
+        animation: aiaasBounce 1.4s infinite ease-in-out;
+      }
+      .aiaas-dot:nth-child(1) { animation-delay: -0.32s; }
+      .aiaas-dot:nth-child(2) { animation-delay: -0.16s; }
+
+      @keyframes aiaasBounce {
+        0%, 80%, 100% { transform: scale(0); }
+        40% { transform: scale(1); }
+      }
+
+      .aiaas-footer {
+        padding: 12px 16px;
+        background: #ffffff;
+        border-top: 1px solid #E2E8F0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .aiaas-input {
+        flex: 1;
+        border: 1px solid #CBD5E1;
+        border-radius: 24px;
+        padding: 10px 16px;
+        font-size: 13px;
+        outline: none;
+        transition: border 0.2s;
+      }
+      .aiaas-input:focus { border-color: ${primaryColor}; }
+
+      .aiaas-send-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: ${primaryColor};
+        color: #ffffff;
+        border: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s, transform 0.1s;
+      }
+      .aiaas-send-btn:hover { opacity: 0.9; transform: scale(1.05); }
+
+      .aiaas-powered {
+        text-align: center;
+        font-size: 10px;
+        color: #94A3B8;
+        padding: 4px 0 6px 0;
+        background: #ffffff;
+      }
+    `;
+    shadow.appendChild(style);
+
+    // Launcher Button
+    var launcher = document.createElement("button");
+    launcher.className = "aiaas-launcher";
+    launcher.innerHTML = `
+      <svg viewBox="0 0 24 24">
+        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+      </svg>
+      <div class="aiaas-badge"></div>
+    `;
+    shadow.appendChild(launcher);
+
+    // Chat Window
+    var win = document.createElement("div");
+    win.className = "aiaas-window";
+    win.innerHTML = `
+      <div class="aiaas-header">
+        <div>
+          <div class="aiaas-header-title">${widgetConfig.header_title}</div>
+          <div class="aiaas-header-status">
+            <span class="aiaas-status-dot"></span> <span id="aiaas-status-txt">AI Active</span>
+          </div>
+        </div>
+        <div class="aiaas-header-actions">
+          <button class="aiaas-handover-btn" id="aiaas-btn-handover">👤 Talk to Human</button>
+          <button class="aiaas-close-btn">✕</button>
+        </div>
+      </div>
+
+      <!-- Pre-Chat Lead Capture Screen -->
+      <div class="aiaas-prechat" style="display: ${visitorName ? 'none' : 'flex'};">
+        <div class="aiaas-prechat-badge">👋 Start a Conversation</div>
+        <div class="aiaas-prechat-title">Welcome to Live Support!</div>
+        <div class="aiaas-prechat-sub">Please introduce yourself so our support team can best assist you.</div>
+        
+        <div class="aiaas-field">
+          <label>Your Full Name *</label>
+          <input type="text" id="aiaas-inp-name" placeholder="e.g. Farhan Rahman" />
+        </div>
+        <div class="aiaas-field">
+          <label>Phone or Email Address *</label>
+          <input type="text" id="aiaas-inp-contact" placeholder="e.g. 01712345678 or farhan@example.com" />
+        </div>
+
+        <button class="aiaas-start-btn" id="aiaas-btn-start">
+          Start Chatting ➔
+        </button>
+      </div>
+
+      <!-- Active Message Thread -->
+      <div class="aiaas-messages" style="display: ${visitorName ? 'flex' : 'none'};"></div>
+
+      <!-- Composer Footer -->
+      <div class="aiaas-footer" style="display: ${visitorName ? 'flex' : 'none'};">
+        <input type="text" class="aiaas-input" placeholder="Type your message..." />
+        <button class="aiaas-send-btn">
+          <svg style="width:16px;height:16px;fill:currentColor;" viewBox="0 0 24 24">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="aiaas-powered">⚡ Powered by N.I. BIZ Soft</div>
+    `;
+    shadow.appendChild(win);
+
+    var prechatBox = win.querySelector(".aiaas-prechat");
+    var nameInp = win.querySelector("#aiaas-inp-name");
+    var contactInp = win.querySelector("#aiaas-inp-contact");
+    var startBtn = win.querySelector("#aiaas-btn-start");
+    var handoverBtn = win.querySelector("#aiaas-btn-handover");
+    var statusTxt = win.querySelector("#aiaas-status-txt");
+
+    var messagesBox = win.querySelector(".aiaas-messages");
+    var footerBox = win.querySelector(".aiaas-footer");
+    var inputEl = win.querySelector(".aiaas-input");
+    var sendBtn = win.querySelector(".aiaas-send-btn");
+    var closeBtn = win.querySelector(".aiaas-close-btn");
+    var titleEl = win.querySelector(".aiaas-header-title");
+
+    function updateAIStatusUI(paused) {
+      isAiPaused = paused;
+      if (paused) {
+        statusTxt.textContent = "Human Support Mode";
+        handoverBtn.innerHTML = "🤖 Switch to AI";
+      } else {
+        statusTxt.textContent = "AI Active";
+        handoverBtn.innerHTML = "👤 Talk to Human";
+      }
+    }
+
+    // Toggle Chat
+    function toggleChat() {
+      isOpen = !isOpen;
+      if (isOpen) {
+        win.classList.add("open");
+        if (visitorName) {
+          inputEl.focus();
+        } else {
+          nameInp.focus();
+        }
+      } else {
+        win.classList.remove("open");
+      }
+    }
+
+    launcher.addEventListener("click", toggleChat);
+    closeBtn.addEventListener("click", toggleChat);
+
+    // 1-Click Handover Switcher
+    handoverBtn.addEventListener("click", async function () {
+      try {
+        var res = await fetch(`${apiUrl}/public/widget/toggle-handover`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            widget_key: widgetKey,
+            visitor_session_id: visitorSessionId,
+            content: isAiPaused ? "resume_ai" : "request_human"
+          })
+        });
+        if (res.ok) {
+          var data = await res.json();
+          updateAIStatusUI(data.ai_paused);
+        }
+      } catch (err) {
+        console.error("Handover error:", err);
+      }
+    });
+
+    // Start Chat from Pre-Chat Form
+    startBtn.addEventListener("click", function () {
+      var n = nameInp.value.trim();
+      var c = contactInp.value.trim();
+      if (!n) {
+        nameInp.focus();
+        return;
+      }
+      if (!c) {
+        contactInp.focus();
+        return;
+      }
+
+      visitorName = n;
+      visitorContact = c;
+      localStorage.setItem("aiaas_vis_name_" + widgetKey, n);
+      localStorage.setItem("aiaas_vis_contact_" + widgetKey, c);
+
+      prechatBox.style.display = "none";
+      messagesBox.style.display = "flex";
+      footerBox.style.display = "flex";
+      inputEl.focus();
+
+      initSession();
+    });
+
+    function formatMessageTime(timestamp) {
+      try {
+        var d = timestamp ? new Date(timestamp) : new Date();
+        var now = new Date();
+        var time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        if (d.toDateString() === now.toDateString()) {
+          return time;
+        }
+        var month = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        return month + ", " + time;
+      } catch (e) {
+        return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+    }
+
+    // Message Appender with Open-Source marked.js Markdown, WhatsApp Date/Time & Anti-Duplication
+    function appendMessage(text, sender, author, timestamp) {
+      if (!text) return;
+      var trimmed = text.trim();
+      var now = Date.now();
+      var dedupeKey = sender + ":::" + trimmed;
+
+      for (var i = recentMessages.length - 1; i >= 0; i--) {
+        if (recentMessages[i].key === dedupeKey && (now - recentMessages[i].time < 10000)) {
+          return;
+        }
+      }
+      recentMessages.push({ key: dedupeKey, time: now });
+      if (recentMessages.length > 50) recentMessages.shift();
+
+      var msg = document.createElement("div");
+      msg.className = "aiaas-msg " + sender;
+      
+      var renderedHtml = renderMarkdown(trimmed);
+      var timeStr = formatMessageTime(timestamp);
+      var checkHtml = sender === "visitor" ? '<span class="aiaas-msg-check">✓✓</span>' : '';
+      var metaHtml = `<div class="aiaas-msg-meta"><span class="aiaas-msg-time">${timeStr}</span>${checkHtml}</div>`;
+
+      if (author && sender !== "visitor") {
+        msg.innerHTML = `<div class="aiaas-msg-author">${author}</div><div class="aiaas-msg-body" data-raw="${encodeURIComponent(trimmed)}">${renderedHtml}</div>${metaHtml}`;
+      } else {
+        msg.innerHTML = `<div class="aiaas-msg-body" data-raw="${encodeURIComponent(trimmed)}">${renderedHtml}</div>${metaHtml}`;
+      }
+      messagesBox.appendChild(msg);
+      messagesBox.scrollTop = messagesBox.scrollHeight;
+    }
+
+    function showTyping() {
+      if (isTyping) return;
+      isTyping = true;
+      var typing = document.createElement("div");
+      typing.className = "aiaas-typing";
+      typing.id = "aiaas-typing-indicator";
+      typing.innerHTML = `<div class="aiaas-dot"></div><div class="aiaas-dot"></div><div class="aiaas-dot"></div>`;
+      messagesBox.appendChild(typing);
+      messagesBox.scrollTop = messagesBox.scrollHeight;
+    }
+
+    function hideTyping() {
+      isTyping = false;
+      var typing = messagesBox.querySelector("#aiaas-typing-indicator");
+      if (typing) typing.remove();
+    }
+
+    // Connect WebSocket
+    function connectWs(convId) {
+      if (!convId) return;
+      try {
+        var wsUrl = apiUrl.replace("http://", "ws://").replace("https://", "wss://");
+        socket = new WebSocket(`${wsUrl}/ws/chat/${convId}`);
+
+        socket.onopen = function () {
+          isWsConnected = true;
+        };
+
+        socket.onclose = function () {
+          isWsConnected = false;
+        };
+
+        socket.onmessage = function (e) {
+          try {
+            var data = JSON.parse(e.data);
+            if (data.event === "ai_state_changed") {
+              updateAIStatusUI(data.ai_paused);
+              if (data.content) {
+                appendMessage(data.content, "system", null, data.created_at);
+              }
+            } else if (data.event === "message" && data.sender_type !== "visitor") {
+              hideTyping();
+              appendMessage(data.content, data.sender_type, data.sender_name || (data.sender_type === "ai" ? "Gemini AI" : "Support Agent"), data.created_at);
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        };
+      } catch (e) {
+        console.error("WebSocket connection error:", e);
+      }
+    }
+
+    // Initialize Session with Backend (sending visitor details)
+    async function initSession() {
+      try {
+        var isEmail = visitorContact && visitorContact.indexOf("@") > -1;
+        var res = await fetch(`${apiUrl}/public/widget/init`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            widget_key: widgetKey,
+            visitor_session_id: visitorSessionId,
+            visitor_name: visitorName || undefined,
+            visitor_email: isEmail ? visitorContact : undefined,
+            visitor_phone: !isEmail ? (visitorContact || undefined) : undefined,
+            current_url: window.location.href,
+            user_agent: navigator.userAgent
+          })
+        });
+
+        if (!res.ok) throw new Error("Failed to init widget session");
+        var data = await res.json();
+        conversationId = data.conversation_id;
+
+        if (data.widget) {
+          var titleText = data.widget.header_title || data.widget.name || "Live Support";
+          titleEl.textContent = titleText;
+          var prechatTitle = win.querySelector(".aiaas-prechat-title");
+          if (prechatTitle) {
+            prechatTitle.textContent = "Welcome to " + titleText + "!";
+          }
+
+          if (data.widget.primary_color) {
+            launcher.style.background = data.widget.primary_color;
+            win.querySelector(".aiaas-header").style.background = data.widget.primary_color;
+            sendBtn.style.background = data.widget.primary_color;
+            startBtn.style.background = data.widget.primary_color;
+            var badgeEl = win.querySelector(".aiaas-prechat-badge");
+            if (badgeEl) badgeEl.style.color = data.widget.primary_color;
+          }
+        }
+
+        // Render previous messages or personalized welcome message
+        if (data.messages && data.messages.length > 0) {
+          messagesBox.innerHTML = "";
+          data.messages.forEach(function (m) {
+            appendMessage(m.content, m.sender_type, m.sender_name, m.created_at);
+          });
+        } else {
+          var welcomeMsg = visitorName 
+            ? "Hello **" + visitorName + "**! Welcome to " + (data.widget && data.widget.header_title ? data.widget.header_title : "our live support") + ". How can we assist your business today?"
+            : (data.widget && data.widget.welcome_message ? data.widget.welcome_message : "Welcome! How can we assist you today?");
+          appendMessage(welcomeMsg, "ai", "AI Assistant", new Date().toISOString());
+        }
+
+        connectWs(conversationId);
+      } catch (err) {
+        console.error("Enterprise widget init error:", err);
+      }
+    }
+
+    // Send Message
+    async function sendMessage() {
+      var text = inputEl.value.trim();
+      if (!text) return;
+      inputEl.value = "";
+
+      appendMessage(text, "visitor");
+      showTyping();
+
+      try {
+        var res = await fetch(`${apiUrl}/public/widget/message`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            widget_key: widgetKey,
+            visitor_session_id: visitorSessionId,
+            content: text
+          })
+        });
+
+        var data = await res.json();
+        hideTyping();
+
+        if (data.is_handover_requested) {
+          updateAIStatusUI(true);
+        } else if (data.ai_response) {
+          appendMessage(data.ai_response, "ai", "AI Assistant");
+        }
+      } catch (err) {
+        hideTyping();
+        console.error("Send message error:", err);
+        appendMessage("Sorry, we could not deliver your message right now. Please try again.", "system");
+      }
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    inputEl.addEventListener("keypress", function (e) {
+      if (e.key === "Enter") {
+        sendMessage();
+      }
+    });
+
+    // Boot session immediately on load to dynamically fetch store header title, branding, colors & chat history
+    initSession();
+
+    // Load official marked library
+    loadMarkedLibrary(apiUrl, function () {
+      if (messagesBox) {
+        var aiBodies = messagesBox.querySelectorAll(".aiaas-msg.ai .aiaas-msg-body");
+        aiBodies.forEach(function (el) {
+          if (el.dataset.raw) {
+            el.innerHTML = renderMarkdown(decodeURIComponent(el.dataset.raw));
+          }
+        });
+      }
+    });
+  }
+
+  window.EnterpriseChatWidget = {
+    init: function (config) {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () {
+          createWidget(config);
+        });
+      } else {
+        createWidget(config);
+      }
+    }
+  };
+
+  // Auto-init if script tag has data-widget-key
+  try {
+    var autoScript = document.currentScript || document.querySelector("script[data-widget-key]");
+    if (autoScript && autoScript.getAttribute("data-widget-key")) {
+      var autoKey = autoScript.getAttribute("data-widget-key");
+      var autoApi = autoScript.getAttribute("data-api-url") || (window.location.origin.includes("3000") ? "http://127.0.0.1:8000/api/v1" : window.location.origin + "/api/v1");
+      var autoColor = autoScript.getAttribute("data-primary-color") || "#4F46E5";
+      var autoPos = autoScript.getAttribute("data-position") || "bottom-right";
+      
+      window.EnterpriseChatWidget.init({
+        widgetKey: autoKey,
+        apiUrl: autoApi,
+        primaryColor: autoColor,
+        position: autoPos
+      });
+    }
+  } catch (e) {
+    console.error("Widget auto-init notice:", e);
+  }
+})(window, document);
