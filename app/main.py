@@ -13,11 +13,17 @@ async def lifespan(app: FastAPI):
     from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_category VARCHAR(50) DEFAULT 'ecommerce';"))
         await conn.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS enabled_modules JSONB DEFAULT '{}'::jsonb;"))
+        await conn.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS ecommerce_settings JSONB DEFAULT '{}'::jsonb;"))
+        await conn.execute(text("ALTER TABLE websites ADD COLUMN IF NOT EXISTS business_category VARCHAR(50) DEFAULT 'ecommerce';"))
+        await conn.execute(text("ALTER TABLE websites ADD COLUMN IF NOT EXISTS ecommerce_config JSONB DEFAULT '{}'::jsonb;"))
+        await conn.execute(text("ALTER TABLE websites ADD COLUMN IF NOT EXISTS branding_config JSONB DEFAULT '{}'::jsonb;"))
         await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS csat_rating INTEGER;"))
         await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS csat_feedback VARCHAR(500);"))
         await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS first_response_time_ms INTEGER;"))
         await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE;"))
+        await conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata_json JSONB DEFAULT '{}'::jsonb;"))
     yield
 
 app = FastAPI(

@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, or_
 from sqlalchemy.orm import selectinload
@@ -11,16 +12,23 @@ from app.core.security import decrypt_secret
 from app.api.v1.auth import get_current_user
 from app.models.all_models import (
     Website, Conversation, Message, AIAssistant, Tenant,
-    ConversationStatus, SenderType, User, UsageRecord, Contact, UserRole
+    ConversationStatus, SenderType, User, UsageRecord, Contact, UserRole,
+    Product, Order
 )
 from app.schemas.schemas import (
     WidgetInitSession, WidgetMessageSend,
-    ConversationOut, MessageOut, MessageCreate
+    ConversationOut, MessageOut, MessageCreate,
+    ProductOut, OrderOut, PublicWidgetOrderCreate, OrderCreate, OrderItemIn,
+    SwitchOrderCOD, RetryBkashPayment
 )
 from app.services.ai.gemini import GeminiService, gemini_service
 from app.services.ai.safety_rules import AISafetyAndRulesEngine
 from app.services.rag.rag_service import RAGService
 from app.services.realtime.connection_manager import manager
+from app.services.ecommerce.product_service import ProductService
+from app.services.ecommerce.order_service import OrderService
+from app.services.payment.bkash import bkash_service
+from app.services.sms.sms_service import SMSService
 
 router = APIRouter(tags=["Live Chat & Inbox"])
 
@@ -149,6 +157,22 @@ async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Dep
         for m in msg_res.scalars().all()
     ]
 
+    # Fetch tenant ecommerce settings
+    tenant = await db.get(Tenant, widget.tenant_id)
+    t_ecom = tenant.ecommerce_settings if tenant and tenant.ecommerce_settings else {}
+
+    # Merge website-level overrides with tenant defaults
+    w_ecom = widget.ecommerce_config or {}
+    merged_ecommerce = {
+        "enabled": widget.business_category == "ecommerce" or w_ecom.get("enabled", True),
+        "show_products_carousel": w_ecom.get("show_products_carousel", True),
+        "allow_instant_checkout": w_ecom.get("allow_instant_checkout", True),
+        "cod_enabled": w_ecom.get("cod_enabled", t_ecom.get("cod_enabled", True)),
+        "bkash_enabled": w_ecom.get("bkash_enabled", t_ecom.get("bkash", {}).get("enabled", False)),
+        "delivery_charge_inside_dhaka": float(w_ecom.get("delivery_charge_inside_dhaka", t_ecom.get("delivery_charge_inside_dhaka", 60.0))),
+        "delivery_charge_outside_dhaka": float(w_ecom.get("delivery_charge_outside_dhaka", t_ecom.get("delivery_charge_outside_dhaka", 120.0)))
+    }
+
     return {
         "conversation_id": conversation.id,
         "visitor_session_id": session_id,
@@ -157,7 +181,10 @@ async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Dep
             "header_title": widget.header_title,
             "welcome_message": widget.welcome_message,
             "primary_color": widget.primary_color,
-            "position": widget.position
+            "position": widget.position,
+            "business_category": widget.business_category or "ecommerce",
+            "ecommerce": merged_ecommerce,
+            "branding": widget.branding_config or {}
         },
         "messages": existing_messages
     }

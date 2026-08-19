@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import asyncio
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -8,7 +12,8 @@ from app.models.all_models import (
     Tenant, User, UserRole, Subscription, SubscriptionTier, SubscriptionStatus,
     ApiKey, Webhook, UsageRecord, Notification, AuditLog,
     AIAssistant, KnowledgeBase, KnowledgeChunk, Website, Contact,
-    Conversation, ConversationStatus, ConversationPriority, Message, SenderType
+    Conversation, ConversationStatus, ConversationPriority, Message, SenderType,
+    Product, Order
 )
 
 def utc_now() -> datetime:
@@ -23,11 +28,17 @@ async def seed_database():
         from sqlalchemy import text
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_category VARCHAR(50) DEFAULT 'ecommerce';"))
             await conn.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS enabled_modules JSONB DEFAULT '{}'::jsonb;"))
+            await conn.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS ecommerce_settings JSONB DEFAULT '{}'::jsonb;"))
+            await conn.execute(text("ALTER TABLE websites ADD COLUMN IF NOT EXISTS business_category VARCHAR(50) DEFAULT 'ecommerce';"))
+            await conn.execute(text("ALTER TABLE websites ADD COLUMN IF NOT EXISTS ecommerce_config JSONB DEFAULT '{}'::jsonb;"))
+            await conn.execute(text("ALTER TABLE websites ADD COLUMN IF NOT EXISTS branding_config JSONB DEFAULT '{}'::jsonb;"))
             await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS csat_rating INTEGER;"))
             await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS csat_feedback VARCHAR(500);"))
             await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS first_response_time_ms INTEGER;"))
             await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE;"))
+            await conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata_json JSONB DEFAULT '{}'::jsonb;"))
 
         # 1. Clean existing demo data if present (Idempotent seed)
         demo_slugs = [
@@ -51,6 +62,7 @@ async def seed_database():
             id=uuid.uuid4(),
             name="Padma Mart Ltd.",
             slug="padma-mart",
+            business_category="ecommerce",
             custom_domain="shop.padmamart.com.bd",
             whitelabel_enabled=True,
             branding_config={
@@ -58,15 +70,15 @@ async def seed_database():
                 "tagline": "Fastest Fashion, Gadgets & Lifestyle E-Commerce in Bangladesh",
                 "primary_color": "#4F46E5",
                 "company_address": "House 14, Road 7, Sector 3, Uttara, Dhaka-1230, Bangladesh",
-                "support_phone": "+880 1837-586105",
-                "currency": "BDT",
-                "currency_symbol": "৳",
-                "logo_url": "/logo.svg"
+                "support_hotline": "+880 1700-112233",
+                "vat_registration_no": "BIN-002948192-0102"
             },
             enabled_modules={
                 "dashboard": True,
                 "inbox": True,
                 "contacts": True,
+                "products": True,
+                "orders": True,
                 "knowledge": True,
                 "websites": True,
                 "analytics": True,
@@ -74,6 +86,24 @@ async def seed_database():
                 "team": True,
                 "settings": True,
                 "subscription": True
+            },
+            ecommerce_settings={
+                "cod_enabled": True,
+                "delivery_charge_inside_dhaka": 60.0,
+                "delivery_charge_outside_dhaka": 120.0,
+                "bkash": {
+                    "enabled": True,
+                    "is_sandbox": True,
+                    "base_url": "https://tokenized.sandbox.bka.sh/v1.2.0-beta",
+                    "app_key": "4f6o0cjiki2rfm34kfdadl1eqq",
+                    "username": "sandboxTokenizedUser02"
+                },
+                "sms": {
+                    "enabled": True,
+                    "provider": "smsmatrix",
+                    "sender_id": "PadmaMart"
+                },
+                "sms_order_template": "Dear {{customer_name}}, your order #{{order_id}} for ৳{{total_amount}} is placed at Padma Mart! Thank you for shopping with us."
             }
         )
         db.add(tenant)
@@ -158,7 +188,24 @@ async def seed_database():
             temperature=0.25,
             top_p=0.95,
             max_output_tokens=1024,
-            system_instruction="You are Padma Mart's friendly AI Customer Support Assistant. Greet customers warmly and answer questions about orders, deliveries, exchange policies, and payment methods using our knowledge base.",
+            system_instruction="""You are Padma Mart's intelligent E-Commerce Sales & Customer Support AI Assistant.
+Padma Mart offers premium fashion, smartwatches, earbuds, and lifestyle products with fast nationwide delivery in Bangladesh.
+
+E-COMMERCE ORDERING & PAYMENT GUIDELINES:
+1. When a customer wants to place an order or inquires about product purchase:
+   - State the product details and price in BDT (৳).
+   - Inform the customer about Delivery Charges: Inside Dhaka ৳60 BDT, Outside Dhaka ৳120 BDT.
+   - Inform the customer about Payment Options:
+     • 💵 Cash on Delivery (COD) - Pay when rider delivers at your doorstep
+     • 📱 bKash Online Payment - Instant mobile payment
+   - Tell them: "আপনি নিচের '🛍️ Browse Products' অপশনে ক্লিক করে সরাসরি ১-ক্লিক ড্রয়ার থেকে অথবা এখানে আপনার নাম, মোবাইল নম্বর, সম্পূর্ণ ডেলিভারি ঠিকানা এবং পেমেন্ট মেথড (Cash on Delivery / bKash) জানিয়ে অর্ডার কনফার্ম করতে পারেন।"
+
+2. When the customer provides their name, mobile, address, and product:
+   - Calculate and mention the total payable amount including delivery fee.
+   - If payment method is not specified, explicitly ask: "আপনি কি 💵 Cash on Delivery (ক্যাশ অন ডেলিভারি) নাকি 📱 bKash অনলাইন পেমেন্টের মাধ্যমে অর্ডারটি কনফার্ম করতে চান?"
+   - Once payment method is confirmed, summarize the order details and assure them that an SMS confirmation will be sent shortly and our dispatch team will deliver the package rapidly!
+
+3. Always be warm, professional, and speak in natural Bengali (or English if the customer writes in English).""",
             fallback_message="Let me connect you directly with Nusrat Jahan from our Order Support team.",
             auto_handover_keywords=["agent", "human", "talk to human", "order issue", "rider", "courier", "bKash dispute", "refund"]
         )
@@ -194,6 +241,7 @@ async def seed_database():
         # 6. Seed E-Commerce Connected Storefronts & Widgets
         site_main = Website(
             tenant_id=tenant.id,
+            assistant_id=assistant_support.id,
             name="Padma Mart Main Storefront",
             domain="padmamart.com.bd",
             widget_key=f"wg_shop_{uuid.uuid4().hex[:12]}",
@@ -204,6 +252,7 @@ async def seed_database():
         )
         site_fashion = Website(
             tenant_id=tenant.id,
+            assistant_id=assistant_sales.id,
             name="Fashion & Lifestyle Hub",
             domain="fashion.padmamart.com.bd",
             widget_key=f"wg_fashion_{uuid.uuid4().hex[:12]}",
@@ -214,6 +263,7 @@ async def seed_database():
         )
         site_gadgets = Website(
             tenant_id=tenant.id,
+            assistant_id=assistant_tech.id,
             name="Gadgets & Electronics Store",
             domain="gadgets.padmamart.com.bd",
             widget_key=f"wg_gadgets_{uuid.uuid4().hex[:12]}",
@@ -223,6 +273,118 @@ async def seed_database():
             is_active=True
         )
         db.add_all([site_main, site_fashion, site_gadgets])
+        await db.flush()
+
+        # 6b. Seed Products into Products Module
+        prod_panjabi = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Men's Premium Cotton Panjabi Collection",
+            slug="mens-premium-cotton-panjabi-collection",
+            category="Fashion",
+            sku="SKU-PANJABI-01",
+            unit_price=2990.0,
+            selling_price=2490.0,
+            stock_quantity=85,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600&auto=format&fit=crop&q=80"],
+            description="100% Egyptian Cotton handcrafted Panjabi with intricate thread embroidery on collar and placket. Available in Royal Blue, Black, Maroon, and White.",
+            specifications={"Material": "100% Egyptian Cotton", "Sizes": "M (38), L (40), XL (42), XXL (44)", "Fit": "Slim Fit & Regular Fit", "Occasion": "Eid / Festive"}
+        )
+        prod_earbuds = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Padma SoundPro Wireless ANC Earbuds",
+            slug="padma-soundpro-wireless-anc-earbuds",
+            category="Electronics",
+            sku="SKU-AUDIO-02",
+            unit_price=3990.0,
+            selling_price=3250.0,
+            stock_quantity=42,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=600&auto=format&fit=crop&q=80"],
+            description="High-fidelity audio with 35dB Active Noise Cancellation, Bluetooth 5.3, 40-hour total battery life with wireless charging case.",
+            specifications={"Battery Life": "8h earbuds + 32h case", "ANC": "35dB Active Noise Cancellation", "Water Resistance": "IPX5", "Warranty": "6 Months Official"}
+        )
+        prod_smartwatch = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Padma Ultra Smartwatch Pro",
+            slug="padma-ultra-smartwatch-pro",
+            category="Electronics",
+            sku="SKU-WATCH-03",
+            unit_price=5500.0,
+            selling_price=4800.0,
+            stock_quantity=30,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80"],
+            description="1.96-inch AMOLED always-on display, Bluetooth calling with noise reduction mic, 24/7 Heart rate & SpO2 monitoring, and 100+ sports modes.",
+            specifications={"Display": "1.96-inch AMOLED (410x502)", "Battery": "7-day battery life", "Straps": "Includes 2 straps (Silicone & Leather)", "Waterproof": "IP68"}
+        )
+        db.add_all([prod_panjabi, prod_earbuds, prod_smartwatch])
+        await db.flush()
+
+        # 6c. Seed Orders into Orders Module
+        order_1 = Order(
+            id=uuid.uuid4(),
+            order_number="ORD-20260818-8419",
+            tenant_id=tenant.id,
+            website_id=site_fashion.id,
+            customer_name="Tanvir Ahmed",
+            customer_phone="01711223344",
+            customer_email="tanvir.ctg@example.com",
+            delivery_address="House 12, Road 4, Dhanmondi",
+            delivery_city="Dhaka",
+            delivery_charge=60.0,
+            items_json=[{
+                "product_id": str(prod_panjabi.id),
+                "title": prod_panjabi.title,
+                "unit_price": 2490.0,
+                "quantity": 1,
+                "line_total": 2490.0,
+                "selected_size": "XL (42)",
+                "selected_color": "Royal Blue",
+                "image_url": prod_panjabi.images[0]
+            }],
+            subtotal_amount=2490.0,
+            total_amount=2550.0,
+            payment_method="cash_on_delivery",
+            payment_status="unpaid",
+            order_status="confirmed",
+            sms_sent=True,
+            tracking_notes="Steadfast Express tracking: ST-99281"
+        )
+        order_2 = Order(
+            id=uuid.uuid4(),
+            order_number="ORD-20260818-9204",
+            tenant_id=tenant.id,
+            website_id=site_gadgets.id,
+            customer_name="Imran Chowdhury",
+            customer_phone="01812345678",
+            customer_email="imran.ctg@gmail.com",
+            delivery_address="Plot 5, Agrabad C/A",
+            delivery_city="Chittagong",
+            delivery_charge=120.0,
+            items_json=[{
+                "product_id": str(prod_smartwatch.id),
+                "title": prod_smartwatch.title,
+                "unit_price": 4800.0,
+                "quantity": 1,
+                "line_total": 4800.0,
+                "selected_size": "Standard",
+                "selected_color": "Black",
+                "image_url": prod_smartwatch.images[0]
+            }],
+            subtotal_amount=4800.0,
+            total_amount=4920.0,
+            payment_method="bkash",
+            payment_status="paid",
+            bkash_trx_id="9X87KL22",
+            order_status="shipped",
+            sms_sent=True,
+            tracking_notes="Pathao Courier: PTH-44819"
+        )
+        db.add_all([order_1, order_2])
         await db.flush()
 
         # 7. Seed Rich E-Commerce RAG Knowledge Base in BDT (৳ Taka)

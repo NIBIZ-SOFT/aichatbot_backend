@@ -563,6 +563,203 @@
       }
       .aiaas-send-btn:hover { opacity: 0.9; transform: scale(1.05); }
 
+      .aiaas-quick-chips {
+        display: flex;
+        gap: 6px;
+        padding: 6px 14px;
+        background: #F8FAFC;
+        border-top: 1px solid #E2E8F0;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .aiaas-chip {
+        background: #ffffff;
+        border: 1px solid #CBD5E1;
+        color: #334155;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 14px;
+        cursor: pointer;
+        transition: all 0.15s;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .aiaas-chip:hover {
+        background: ${primaryColor};
+        color: #ffffff;
+        border-color: ${primaryColor};
+        transform: translateY(-1px);
+      }
+
+      /* In-Chat Product Cards */
+      .aiaas-prod-container {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 8px;
+        width: 100%;
+      }
+      .aiaas-prod-card {
+        background: #ffffff;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        transition: transform 0.15s;
+      }
+      .aiaas-prod-card:hover {
+        border-color: #CBD5E1;
+        transform: translateY(-1px);
+      }
+      .aiaas-prod-img {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        object-fit: cover;
+        background: #F1F5F9;
+        flex-shrink: 0;
+      }
+      .aiaas-prod-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .aiaas-prod-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #0F172A;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .aiaas-prod-price {
+        font-size: 12px;
+        font-weight: 800;
+        color: #059669;
+        margin-top: 2px;
+      }
+      .aiaas-prod-buy-btn {
+        background: #059669;
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: opacity 0.15s;
+        flex-shrink: 0;
+      }
+      .aiaas-prod-buy-btn:hover {
+        opacity: 0.9;
+      }
+
+      /* bKash Payment Pending Interactive Card */
+      .aiaas-pay-action-card {
+        background: #FDF2F8;
+        border: 1.5px solid #FBCFE8;
+        border-radius: 14px;
+        padding: 12px 14px;
+        margin-top: 8px;
+        box-shadow: 0 4px 12px rgba(226, 19, 110, 0.08);
+      }
+      .aiaas-pay-action-title {
+        font-size: 13px;
+        font-weight: 800;
+        color: #9D174D;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+      }
+      .aiaas-pay-action-desc {
+        font-size: 11.5px;
+        color: #831843;
+        line-height: 1.4;
+        margin-bottom: 10px;
+      }
+      .aiaas-pay-btn-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .aiaas-btn-reopen-bkash {
+        background: #E2136E;
+        color: #ffffff;
+        border: none;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: transform 0.15s, opacity 0.15s;
+        box-shadow: 0 2px 8px rgba(226, 19, 110, 0.25);
+      }
+      .aiaas-btn-reopen-bkash:hover {
+        opacity: 0.95;
+        transform: translateY(-1px);
+      }
+      .aiaas-btn-switch-cod {
+        background: #ffffff;
+        color: #374151;
+        border: 1px solid #D1D5DB;
+        border-radius: 10px;
+        padding: 7px 12px;
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: background 0.15s;
+      }
+      .aiaas-btn-switch-cod:hover {
+        background: #F3F4F6;
+        color: #111827;
+      }
+
+      /* In-Widget 1-Click Checkout Drawer */
+      .aiaas-checkout-drawer {
+        position: absolute;
+        inset: 0;
+        background: #ffffff;
+        z-index: 50;
+        display: none;
+        flex-direction: column;
+        padding: 18px;
+        overflow-y: auto;
+        animation: aiaasSlideUp 0.25s ease-out;
+      }
+      .aiaas-checkout-drawer.open {
+        display: flex;
+      }
+      @keyframes aiaasSlideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+      .aiaas-checkout-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #E2E8F0;
+        padding-bottom: 10px;
+        margin-bottom: 12px;
+      }
+      .aiaas-checkout-title {
+        font-size: 15px;
+        font-weight: 800;
+        color: #0F172A;
+      }
+
       .aiaas-powered {
         text-align: center;
         font-size: 10px;
@@ -624,6 +821,13 @@
       <!-- Active Message Thread -->
       <div class="aiaas-messages" style="display: ${visitorName ? 'flex' : 'none'};"></div>
 
+      <!-- Quick Action Chips for E-Commerce -->
+      <div class="aiaas-quick-chips" style="display: ${visitorName ? 'flex' : 'none'};">
+        <button class="aiaas-chip" id="aiaas-chip-products">🛍️ Browse Products</button>
+        <button class="aiaas-chip" id="aiaas-chip-order">📦 Track Order</button>
+        <button class="aiaas-chip" id="aiaas-chip-human">👤 Support Agent</button>
+      </div>
+
       <!-- Composer Footer -->
       <div class="aiaas-footer" style="display: ${visitorName ? 'flex' : 'none'};">
         <input type="text" class="aiaas-input" placeholder="Type your message..." />
@@ -634,6 +838,49 @@
         </button>
       </div>
       <div class="aiaas-powered">⚡ Powered by N.I. BIZ Soft</div>
+
+      <!-- In-Widget 1-Click Instant Checkout Drawer -->
+      <div class="aiaas-checkout-drawer" id="aiaas-checkout-modal">
+        <div class="aiaas-checkout-header">
+          <div class="aiaas-checkout-title">🛍️ 1-Click Instant Checkout</div>
+          <button class="aiaas-close-btn" style="background:#E2E8F0;color:#0F172A;" id="aiaas-btn-close-checkout">✕</button>
+        </div>
+        <div id="aiaas-checkout-product-summary" style="background:#F8FAFC;padding:10px;border-radius:10px;border:1px solid #E2E8F0;margin-bottom:12px;font-size:12px;"></div>
+        
+        <div class="aiaas-field" style="margin-bottom:10px;">
+          <label>Your Full Name *</label>
+          <input type="text" id="aiaas-chk-name" placeholder="Full name" />
+        </div>
+        <div class="aiaas-field" style="margin-bottom:10px;">
+          <label>Phone Number (for Order & SMS) *</label>
+          <input type="text" id="aiaas-chk-phone" placeholder="017xxxxxxxx" />
+        </div>
+        <div class="aiaas-field" style="margin-bottom:10px;">
+          <label>Delivery Address *</label>
+          <input type="text" id="aiaas-chk-address" placeholder="House, Road, Area..." />
+        </div>
+        <div class="aiaas-field" style="margin-bottom:10px;">
+          <label>City & Delivery Fee</label>
+          <select id="aiaas-chk-city" style="width:100%;padding:10px;border-radius:12px;border:1px solid #CBD5E1;font-size:13px;background:#ffffff;">
+            <option value="Dhaka">Inside Dhaka (৳60 Delivery)</option>
+            <option value="Chittagong">Chittagong (৳120 Delivery)</option>
+            <option value="Sylhet">Sylhet (৳120 Delivery)</option>
+            <option value="Rajshahi">Rajshahi (৳120 Delivery)</option>
+            <option value="Other">Other City / District (৳120 Delivery)</option>
+          </select>
+        </div>
+        <div class="aiaas-field" style="margin-bottom:14px;">
+          <label>Payment Method</label>
+          <select id="aiaas-chk-payment" style="width:100%;padding:10px;border-radius:12px;border:1px solid #CBD5E1;font-size:13px;background:#ffffff;">
+            <option value="cash_on_delivery">💵 Cash on Delivery (COD)</option>
+            <option value="bkash">📱 bKash Online Payment</option>
+          </select>
+        </div>
+
+        <button class="aiaas-start-btn" id="aiaas-btn-submit-order" style="background:#059669;">
+          Confirm Order ➔
+        </button>
+      </div>
     `;
     shadow.appendChild(win);
 
@@ -645,6 +892,23 @@
     var statusTxt = win.querySelector("#aiaas-status-txt");
 
     var messagesBox = win.querySelector(".aiaas-messages");
+    var chipsBox = win.querySelector(".aiaas-quick-chips");
+    var chipProducts = win.querySelector("#aiaas-chip-products");
+    var chipOrder = win.querySelector("#aiaas-chip-order");
+    var chipHuman = win.querySelector("#aiaas-chip-human");
+
+    var checkoutModal = win.querySelector("#aiaas-checkout-modal");
+    var btnCloseCheckout = win.querySelector("#aiaas-btn-close-checkout");
+    var btnSubmitOrder = win.querySelector("#aiaas-btn-submit-order");
+    var chkProductSummary = win.querySelector("#aiaas-checkout-product-summary");
+    var chkName = win.querySelector("#aiaas-chk-name");
+    var chkPhone = win.querySelector("#aiaas-chk-phone");
+    var chkAddress = win.querySelector("#aiaas-chk-address");
+    var chkCity = win.querySelector("#aiaas-chk-city");
+    var chkPayment = win.querySelector("#aiaas-chk-payment");
+
+    var activeOrderProduct = null;
+
     var footerBox = win.querySelector(".aiaas-footer");
     var inputEl = win.querySelector(".aiaas-input");
     var sendBtn = win.querySelector(".aiaas-send-btn");
@@ -721,11 +985,307 @@
 
       prechatBox.style.display = "none";
       messagesBox.style.display = "flex";
+      chipsBox.style.display = "flex";
       footerBox.style.display = "flex";
       inputEl.focus();
 
       initSession();
     });
+
+    // In-Chat E-Commerce Product Carousel Renderer
+    async function loadAndRenderProducts() {
+      try {
+        var res = await fetch(`${apiUrl}/public/widget/products?widget_key=${widgetKey}`);
+        if (res.ok) {
+          var prods = await res.json();
+          if (prods && prods.length > 0) {
+            appendProductCarousel(prods);
+          } else {
+            appendMessage("No products are currently active in our store catalog.", "ai", "AI Assistant");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load products:", err);
+      }
+    }
+
+    function appendProductCarousel(productsList) {
+      var wrapper = document.createElement("div");
+      wrapper.className = "aiaas-msg ai";
+
+      var authorDiv = document.createElement("div");
+      authorDiv.className = "aiaas-msg-author";
+      authorDiv.textContent = "🛍️ Featured Store Products";
+      wrapper.appendChild(authorDiv);
+
+      var container = document.createElement("div");
+      container.className = "aiaas-prod-container";
+
+      productsList.forEach(function (p) {
+        var card = document.createElement("div");
+        card.className = "aiaas-prod-card";
+        var imgHtml = (p.images && p.images[0]) ? `<img src="${p.images[0]}" class="aiaas-prod-img" alt=""/>` : `<div class="aiaas-prod-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;">🛍️</div>`;
+        card.innerHTML = `
+          ${imgHtml}
+          <div class="aiaas-prod-info">
+            <div class="aiaas-prod-title">${p.title}</div>
+            <div class="aiaas-prod-price">৳${p.selling_price.toLocaleString()} BDT</div>
+          </div>
+          <button class="aiaas-prod-buy-btn">Order Now</button>
+        `;
+
+        var orderBtn = card.querySelector(".aiaas-prod-buy-btn");
+        orderBtn.addEventListener("click", function () {
+          openCheckout(p);
+        });
+
+        container.appendChild(card);
+      });
+
+      wrapper.appendChild(container);
+      messagesBox.appendChild(wrapper);
+      messagesBox.scrollTop = messagesBox.scrollHeight;
+    }
+
+    function openCheckout(product) {
+      activeOrderProduct = product;
+      chkProductSummary.innerHTML = `
+        <div style="font-weight:700;color:#0F172A;">${product.title}</div>
+        <div style="color:#059669;font-weight:800;margin-top:2px;">Price: ৳${product.selling_price.toLocaleString()} BDT</div>
+      `;
+      chkName.value = visitorName || "";
+      chkPhone.value = visitorContact || "";
+      checkoutModal.classList.add("open");
+    }
+
+    if (btnCloseCheckout) {
+      btnCloseCheckout.addEventListener("click", function () {
+        checkoutModal.classList.remove("open");
+      });
+    }
+
+    if (btnSubmitOrder) {
+      btnSubmitOrder.addEventListener("click", async function () {
+        if (!activeOrderProduct) return;
+        var name = chkName.value.trim();
+        var phone = chkPhone.value.trim();
+        var address = chkAddress.value.trim();
+        var city = chkCity.value;
+        var paymentMethod = chkPayment.value;
+
+        if (!name) { chkName.focus(); return; }
+        if (!phone) { chkPhone.focus(); return; }
+        if (!address) { chkAddress.focus(); return; }
+
+        btnSubmitOrder.disabled = true;
+        btnSubmitOrder.textContent = "Processing Order...";
+
+        try {
+          if (paymentMethod === "bkash") {
+            var res = await fetch(`${apiUrl}/public/widget/orders/bkash/init`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                widget_key: widgetKey,
+                visitor_session_id: visitorSessionId,
+                customer_name: name,
+                customer_phone: phone,
+                delivery_address: address,
+                delivery_city: city,
+                payment_method: "bkash",
+                items: [{
+                  product_id: activeOrderProduct.id,
+                  title: activeOrderProduct.title,
+                  price: activeOrderProduct.selling_price,
+                  quantity: 1,
+                  image_url: (activeOrderProduct.images && activeOrderProduct.images[0]) || ""
+                }]
+              })
+            });
+
+            if (res.ok) {
+              var bkData = await res.json();
+              checkoutModal.classList.remove("open");
+              
+              // Append Interactive bKash Pending Card with Retry & Switch-to-COD Buttons
+              appendBkashPendingCard(bkData);
+
+              if (bkData.bkashURL) {
+                window.open(bkData.bkashURL, "bKashPayment", "width=460,height=660");
+              }
+            } else {
+              var err = await res.json().catch(() => ({}));
+              alert(err.detail || "bKash payment initialization failed. Please try Cash on Delivery.");
+            }
+          } else {
+            var res = await fetch(`${apiUrl}/public/widget/orders/checkout`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                widget_key: widgetKey,
+                visitor_session_id: visitorSessionId,
+                customer_name: name,
+                customer_phone: phone,
+                delivery_address: address,
+                delivery_city: city,
+                payment_method: "cash_on_delivery",
+                items: [{
+                  product_id: activeOrderProduct.id,
+                  title: activeOrderProduct.title,
+                  price: activeOrderProduct.selling_price,
+                  quantity: 1,
+                  image_url: (activeOrderProduct.images && activeOrderProduct.images[0]) || ""
+                }]
+              })
+            });
+
+            if (res.ok) {
+              var orderData = await res.json();
+              checkoutModal.classList.remove("open");
+              appendMessage(`🎉 **Order Placed Successfully!**\n\n- **Order #:** \`${orderData.order_number}\`\n- **Total Amount:** ৳${orderData.total_amount.toLocaleString()} BDT (Including Delivery ৳${orderData.delivery_charge.toLocaleString()})\n- **Delivery Address:** ${orderData.delivery_address}, ${orderData.delivery_city}\n- **Payment Method:** 💵 Cash on Delivery (COD)\n- **SMS:** Confirmation sent to \`${orderData.customer_phone}\``, "system", "Order Desk");
+            } else {
+              var err = await res.json().catch(() => ({}));
+              alert(err.detail || "Could not place order. Please try again.");
+            }
+          }
+        } catch (e) {
+          alert("Checkout network error. Please try again.");
+        } finally {
+          btnSubmitOrder.disabled = false;
+          btnSubmitOrder.textContent = "Confirm Order ➔";
+        }
+      });
+    }
+
+    if (chipProducts) {
+      chipProducts.addEventListener("click", function () {
+        loadAndRenderProducts();
+      });
+    }
+    if (chipOrder) {
+      chipOrder.addEventListener("click", function () {
+        appendMessage("To track your delivery, please provide your **Order Number** (e.g. `ORD-20260819-xxxx`) or Phone Number.", "ai", "AI Assistant");
+      });
+    }
+    if (chipHuman) {
+      chipHuman.addEventListener("click", function () {
+        handoverBtn.click();
+      });
+    }
+
+    // Render Interactive bKash Pending Action Card
+    function appendBkashPendingCard(bkData) {
+      var ordNum = bkData.order_number || bkData.merchantInvoiceNumber;
+      var totalAmt = bkData.total_amount ? Number(bkData.total_amount).toLocaleString() : "0";
+      var currentBkashUrl = bkData.bkashURL || "";
+
+      var cardDiv = document.createElement("div");
+      cardDiv.className = "aiaas-msg system";
+      cardDiv.id = "aiaas-pay-card-" + ordNum;
+
+      cardDiv.innerHTML = `
+        <div class="aiaas-msg-author">📱 bKash Payment Desk</div>
+        <div class="aiaas-msg-body">
+          <div class="aiaas-pay-action-card">
+            <div class="aiaas-pay-action-title">
+              <span>📱 bKash Payment Pending</span>
+              <span style="margin-left:auto; font-size:11px; background:#FCE7F3; color:#BE185D; padding:2px 8px; border-radius:12px;">৳${totalAmt} BDT</span>
+            </div>
+            <div class="aiaas-pay-action-desc">
+              Order #<strong>${ordNum}</strong> initiated. If your bKash payment window closed or timed out, click below to re-open or switch to Cash on Delivery:
+            </div>
+            <div class="aiaas-pay-btn-group" id="aiaas-btn-grp-${ordNum}">
+              <button class="aiaas-btn-reopen-bkash" id="btn-reopen-${ordNum}">
+                ⚡ Re-open bKash Checkout
+              </button>
+              <button class="aiaas-btn-switch-cod" id="btn-switch-cod-${ordNum}">
+                💵 Switch to Cash on Delivery
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      messagesBox.appendChild(cardDiv);
+      messagesBox.scrollTop = messagesBox.scrollHeight;
+
+      // Event: Re-open bKash Checkout
+      var btnReopen = cardDiv.querySelector("#btn-reopen-" + ordNum);
+      if (btnReopen) {
+        btnReopen.addEventListener("click", async function () {
+          btnReopen.disabled = true;
+          btnReopen.textContent = "Opening bKash Gateway...";
+          try {
+            var res = await fetch(`${apiUrl}/public/widget/orders/bkash/retry`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                widget_key: widgetKey,
+                visitor_session_id: visitorSessionId,
+                order_number: ordNum
+              })
+            });
+            var data = await res.json();
+            if (data.status === "already_paid") {
+              // Order was already paid! Remove retry card
+              cardDiv.remove();
+              appendMessage(`🎉 **Order #${ordNum} is already verified and PAID!**`, "system", "bKash Verified");
+            } else if (data.bkashURL) {
+              window.open(data.bkashURL, "bKashPayment", "width=460,height=660");
+            } else {
+              window.open(currentBkashUrl, "bKashPayment", "width=460,height=660");
+            }
+          } catch (e) {
+            window.open(currentBkashUrl, "bKashPayment", "width=460,height=660");
+          } finally {
+            btnReopen.disabled = false;
+            btnReopen.textContent = "⚡ Re-open bKash Checkout";
+          }
+        });
+      }
+
+      // Event: Switch to Cash on Delivery
+      var btnSwitch = cardDiv.querySelector("#btn-switch-cod-" + ordNum);
+      if (btnSwitch) {
+        btnSwitch.addEventListener("click", async function () {
+          btnSwitch.disabled = true;
+          btnSwitch.textContent = "Switching to COD...";
+          try {
+            var res = await fetch(`${apiUrl}/public/widget/orders/switch-cod`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                widget_key: widgetKey,
+                visitor_session_id: visitorSessionId,
+                order_number: ordNum
+              })
+            });
+            if (res.ok) {
+              var data = await res.json();
+              // Remove the pending bKash card completely
+              cardDiv.remove();
+              appendMessage(
+                `🎉 **Payment Method Switched to Cash on Delivery!**\n\n` +
+                `• **Order Number:** \`${ordNum}\`\n` +
+                `• **Total Amount:** ৳${totalAmt} BDT\n` +
+                `• **Status:** Confirmed (Pay upon delivery)\n` +
+                `• **SMS:** Confirmation sent to your mobile phone.`,
+                "system",
+                "Order Desk"
+              );
+            } else {
+              var err = await res.json().catch(() => ({}));
+              alert(err.detail || "Could not switch payment method.");
+            }
+          } catch (e) {
+            alert("Network error switching payment method.");
+          } finally {
+            btnSwitch.disabled = false;
+            btnSwitch.textContent = "💵 Switch to Cash on Delivery";
+          }
+        });
+      }
+    }
 
     function formatMessageTime(timestamp) {
       try {
@@ -759,7 +1319,7 @@
 
       var msg = document.createElement("div");
       msg.className = "aiaas-msg " + sender;
-      
+
       var renderedHtml = renderMarkdown(trimmed);
       var timeStr = formatMessageTime(timestamp);
       var checkHtml = sender === "visitor" ? '<span class="aiaas-msg-check">✓✓</span>' : '';
@@ -874,7 +1434,7 @@
             appendMessage(m.content, m.sender_type, m.sender_name, m.created_at);
           });
         } else {
-          var welcomeMsg = visitorName 
+          var welcomeMsg = visitorName
             ? "Hello **" + visitorName + "**! Welcome to " + (data.widget && data.widget.header_title ? data.widget.header_title : "our live support") + ". How can we assist your business today?"
             : (data.widget && data.widget.welcome_message ? data.widget.welcome_message : "Welcome! How can we assist you today?");
           appendMessage(welcomeMsg, "ai", "AI Assistant", new Date().toISOString());
@@ -928,6 +1488,32 @@
       }
     });
 
+    // Listen for Real-Time bKash Popup PostMessage Events
+    window.addEventListener("message", function (event) {
+      if (event && event.data && event.data.type === "AIAAS_BKASH_PAYMENT_SUCCESS") {
+        var ordNum = event.data.order_number || "ORD-CONFIRMED";
+        var trx = event.data.trx_id || "TRX-VERIFIED";
+        var amt = event.data.amount || "";
+
+        // Remove Pending bKash Card if present in DOM
+        var pendingCard = win.querySelector("#aiaas-pay-card-" + ordNum);
+        if (pendingCard) {
+          pendingCard.remove();
+        }
+
+        appendMessage(
+          `🎉 **bKash Payment Verified & Confirmed!**\n\n` +
+          `• **Order Number:** \`${ordNum}\`\n` +
+          `• **bKash TrxID:** \`${trx}\`\n` +
+          `• **Amount Paid:** ৳${amt} BDT\n` +
+          `• **Payment Status:** ✅ PAID via bKash\n\n` +
+          `An automated confirmation SMS has been dispatched. Our team will pack and ship your parcel shortly!`,
+          "system",
+          "bKash Verified"
+        );
+      }
+    });
+
     // Boot session immediately on load to dynamically fetch store header title, branding, colors & chat history
     initSession();
 
@@ -964,7 +1550,7 @@
       var autoApi = autoScript.getAttribute("data-api-url") || (window.location.origin.includes("3000") ? "http://127.0.0.1:8000/api/v1" : window.location.origin + "/api/v1");
       var autoColor = autoScript.getAttribute("data-primary-color") || "#4F46E5";
       var autoPos = autoScript.getAttribute("data-position") || "bottom-right";
-      
+
       window.EnterpriseChatWidget.init({
         widgetKey: autoKey,
         apiUrl: autoApi,

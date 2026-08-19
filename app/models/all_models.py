@@ -68,7 +68,9 @@ class Tenant(Base):
     branding_config: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
     
     # Dynamic Feature Flags / Module Permissions (Per-Tenant Customization)
+    business_category: Mapped[str] = mapped_column(String(50), default="ecommerce")
     enabled_modules: Mapped[Dict[str, bool]] = mapped_column(JSON, default=dict)
+    ecommerce_settings: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
 
     # Encrypted BYOK Gemini Key
     encrypted_gemini_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -87,6 +89,8 @@ class Tenant(Base):
     conversations: Mapped[List["Conversation"]] = relationship("Conversation", back_populates="tenant", cascade="all, delete-orphan")
     notifications: Mapped[List["Notification"]] = relationship("Notification", back_populates="tenant", cascade="all, delete-orphan")
     audit_logs: Mapped[List["AuditLog"]] = relationship("AuditLog", back_populates="tenant", cascade="all, delete-orphan")
+    products: Mapped[List["Product"]] = relationship("Product", back_populates="tenant", cascade="all, delete-orphan")
+    orders: Mapped[List["Order"]] = relationship("Order", back_populates="tenant", cascade="all, delete-orphan")
 
 class User(Base):
     __tablename__ = "users"
@@ -290,6 +294,12 @@ class Website(Base):
     header_title: Mapped[str] = mapped_column(String(100), default="Live AI Support")
     welcome_message: Mapped[str] = mapped_column(String(500), default="Hello! How can we assist you today?")
     position: Mapped[str] = mapped_column(String(20), default="bottom-right")
+    
+    # E-Commerce & Widget Customization Configuration
+    business_category: Mapped[str] = mapped_column(String(50), default="ecommerce")
+    ecommerce_config: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    branding_config: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
@@ -298,6 +308,7 @@ class Website(Base):
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="websites")
     assistant: Mapped[Optional["AIAssistant"]] = relationship("AIAssistant", back_populates="websites")
     conversations: Mapped[List["Conversation"]] = relationship("Conversation", back_populates="website")
+    orders: Mapped[List["Order"]] = relationship("Order", back_populates="website")
 
 class Contact(Base):
     __tablename__ = "contacts"
@@ -359,6 +370,7 @@ class Conversation(Base):
     contact: Mapped[Optional["Contact"]] = relationship("Contact", back_populates="conversations")
     assigned_agent: Mapped[Optional["User"]] = relationship("User", back_populates="assigned_conversations")
     messages: Mapped[List["Message"]] = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
+    orders: Mapped[List["Order"]] = relationship("Order", back_populates="conversation")
 
 class Message(Base):
     __tablename__ = "messages"
@@ -454,3 +466,70 @@ class PlatformSetting(Base):
     key: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     value_json: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+# ----------------- LAYER 6: CONVERSATIONAL E-COMMERCE MODELS -----------------
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=False)
+    
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    slug: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    category: Mapped[str] = mapped_column(String(100), default="General")
+    sku: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    unit_price: Mapped[float] = mapped_column(Float, default=0.0) # MSRP / Regular Price in BDT
+    selling_price: Mapped[float] = mapped_column(Float, default=0.0) # Offer / Selling Price in BDT
+    
+    stock_quantity: Mapped[int] = mapped_column(Integer, default=100)
+    stock_status: Mapped[str] = mapped_column(String(50), default="in_stock") # in_stock, out_of_stock, pre_order
+    
+    images: Mapped[List[str]] = mapped_column(JSON, default=list) # Array of image URLs
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    specifications: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict) # color, size, warranty, features
+    
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="products")
+
+
+class Order(Base):
+    __tablename__ = "orders"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    order_number: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=False)
+    website_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("websites.id", ondelete="SET NULL"), nullable=True)
+    conversation_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True)
+    
+    customer_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    customer_phone: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
+    customer_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    
+    delivery_address: Mapped[str] = mapped_column(Text, nullable=False)
+    delivery_city: Mapped[str] = mapped_column(String(100), default="Dhaka")
+    delivery_charge: Mapped[float] = mapped_column(Float, default=60.0)
+    
+    items_json: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, default=list) # [{"product_id": "...", "title": "...", "price": 2490, "quantity": 1, "size": "L"}]
+    subtotal_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    total_amount: Mapped[float] = mapped_column(Float, default=0.0) # subtotal + delivery_charge
+    
+    payment_method: Mapped[str] = mapped_column(String(50), default="cash_on_delivery") # cash_on_delivery, bkash
+    payment_status: Mapped[str] = mapped_column(String(50), default="unpaid") # unpaid, paid, refunded
+    bkash_trx_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    
+    order_status: Mapped[str] = mapped_column(String(50), default="pending") # pending, confirmed, shipped, delivered, cancelled
+    sms_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    tracking_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="orders")
+    website: Mapped[Optional["Website"]] = relationship("Website", back_populates="orders")
+    conversation: Mapped[Optional["Conversation"]] = relationship("Conversation", back_populates="orders")

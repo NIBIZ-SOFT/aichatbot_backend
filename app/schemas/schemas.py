@@ -196,6 +196,9 @@ class WebsiteCreate(BaseModel):
     header_title: str = "Live AI Support"
     welcome_message: str = "Hi! How can I help you today?"
     position: str = "bottom-right"
+    business_category: str = "ecommerce"
+    ecommerce_config: Optional[Dict[str, Any]] = None
+    branding_config: Optional[Dict[str, Any]] = None
 
 class WebsiteOut(BaseModel):
     id: uuid.UUID
@@ -207,6 +210,9 @@ class WebsiteOut(BaseModel):
     header_title: str
     welcome_message: str
     position: str
+    business_category: Optional[str] = "ecommerce"
+    ecommerce_config: Optional[Dict[str, Any]] = None
+    branding_config: Optional[Dict[str, Any]] = None
     is_active: bool
     created_at: datetime
     class Config:
@@ -474,3 +480,155 @@ class AnalyticsTrendPoint(BaseModel):
     ai_responses: int
     human_responses: int
     tokens: int
+
+# ----------------- E-COMMERCE & CONVERSATIONAL COMMERCE SCHEMAS -----------------
+
+class ProductCreate(BaseModel):
+    title: str
+    category: str = "General"
+    sku: Optional[str] = None
+    unit_price: float = 0.0
+    selling_price: float = 0.0
+    stock_quantity: int = 100
+    stock_status: str = "in_stock" # in_stock, out_of_stock, pre_order
+    images: List[str] = []
+    description: Optional[str] = None
+    specifications: Optional[Dict[str, Any]] = None
+    is_active: bool = True
+
+class ProductUpdate(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    sku: Optional[str] = None
+    unit_price: Optional[float] = None
+    selling_price: Optional[float] = None
+    stock_quantity: Optional[int] = None
+    stock_status: Optional[str] = None
+    images: Optional[List[str]] = None
+    description: Optional[str] = None
+    specifications: Optional[Dict[str, Any]] = None
+    is_active: Optional[bool] = None
+
+class ProductOut(BaseModel):
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    title: str
+    slug: str
+    category: str
+    sku: Optional[str]
+    unit_price: float
+    selling_price: float
+    stock_quantity: int
+    stock_status: str
+    images: List[str]
+    description: Optional[str]
+    specifications: Dict[str, Any]
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class OrderItemIn(BaseModel):
+    product_id: str
+    title: str
+    price: float
+    quantity: int = 1
+    selected_size: Optional[str] = None
+    selected_color: Optional[str] = None
+    image_url: Optional[str] = None
+
+class OrderCreate(BaseModel):
+    customer_name: str
+    customer_phone: str
+    customer_email: Optional[str] = None
+    delivery_address: str
+    delivery_city: str = "Dhaka"
+    items: List[OrderItemIn]
+    payment_method: str = "cash_on_delivery" # cash_on_delivery, bkash
+    website_id: Optional[uuid.UUID] = None
+    conversation_id: Optional[uuid.UUID] = None
+
+class PublicWidgetOrderCreate(BaseModel):
+    widget_key: str
+    visitor_session_id: str
+    customer_name: str
+    customer_phone: str
+    customer_email: Optional[str] = None
+    delivery_address: str
+    delivery_city: str = "Dhaka"
+    items: List[OrderItemIn]
+    payment_method: str = "cash_on_delivery" # cash_on_delivery, bkash
+
+class OrderStatusUpdate(BaseModel):
+    order_status: str # pending, confirmed, shipped, delivered, cancelled
+    payment_status: Optional[str] = None # unpaid, paid, refunded
+    tracking_notes: Optional[str] = None
+    send_sms_notification: bool = True
+
+class OrderOut(BaseModel):
+    id: uuid.UUID
+    order_number: str
+    tenant_id: uuid.UUID
+    website_id: Optional[uuid.UUID]
+    conversation_id: Optional[uuid.UUID]
+    customer_name: str
+    customer_phone: str
+    customer_email: Optional[str]
+    delivery_address: str
+    delivery_city: str
+    delivery_charge: float
+    items_json: List[Dict[str, Any]]
+    subtotal_amount: float
+    total_amount: float
+    payment_method: str
+    payment_status: str
+    bkash_trx_id: Optional[str]
+    order_status: str
+    sms_sent: bool
+    tracking_notes: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class EcommerceSettingsOut(BaseModel):
+    business_category: str = "ecommerce"
+    cod_enabled: bool = True
+    bkash_enabled: bool = False
+    bkash_is_sandbox: bool = True
+    bkash_base_url: Optional[str] = "https://tokenized.sandbox.bka.sh/v1.2.0-beta"
+    bkash_app_key_masked: Optional[str] = None
+    bkash_username_masked: Optional[str] = None
+    delivery_charge_inside_dhaka: float = 60.0
+    delivery_charge_outside_dhaka: float = 120.0
+    sms_notifications_enabled: bool = True
+    sms_provider: str = "smsmatrix"
+    sms_sender_id_masked: Optional[str] = None
+    sms_order_template: Optional[str] = None
+
+class EcommerceSettingsUpdate(BaseModel):
+    business_category: Optional[str] = None
+    cod_enabled: Optional[bool] = None
+    bkash_enabled: Optional[bool] = None
+    bkash_is_sandbox: Optional[bool] = None
+    bkash_base_url: Optional[str] = None
+    bkash_app_key: Optional[str] = None
+    bkash_app_secret: Optional[str] = None
+    bkash_username: Optional[str] = None
+    bkash_password: Optional[str] = None
+    delivery_charge_inside_dhaka: Optional[float] = None
+    delivery_charge_outside_dhaka: Optional[float] = None
+    sms_notifications_enabled: Optional[bool] = None
+    sms_provider: Optional[str] = None
+    sms_api_key: Optional[str] = None
+    sms_sender_id: Optional[str] = None
+class SwitchOrderCOD(BaseModel):
+    widget_key: str
+    visitor_session_id: str
+    order_number: str
+
+class RetryBkashPayment(BaseModel):
+    widget_key: str
+    visitor_session_id: str
+    order_number: str
