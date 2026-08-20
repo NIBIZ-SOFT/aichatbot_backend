@@ -69,6 +69,8 @@ async def root():
     return {
         "status": "healthy",
         "service": settings.PROJECT_NAME,
+        "health": "/health",
+        "seed_database": "/seed-db",
         "docs": f"{settings.API_V1_STR}/docs",
         "api_v1": f"{settings.API_V1_STR}",
         "widget_script": "/static/widget.js",
@@ -97,3 +99,41 @@ async def health_check():
         "environment": settings.ENVIRONMENT,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+@app.get("/seed-db")
+@app.get("/api/v1/seed-db")
+async def run_database_seed():
+    """
+    Trigger database schema creation & demo seeding via direct HTTP GET request.
+    """
+    try:
+        from app.seed import seed_database
+        await seed_database()
+        return {
+            "status": "success",
+            "message": "Database successfully created and seeded with Bangladeshi E-Commerce demo data!",
+            "credentials": {
+                "super_admin": {
+                    "email": "superadmin@enterprise.example",
+                    "password": "DemoPass123!"
+                },
+                "tenant_owner": {
+                    "email": "owner@padmadigital.example",
+                    "password": "DemoPass123!"
+                },
+                "support_agent": {
+                    "email": "nusrat.support@padmadigital.example",
+                    "password": "DemoPass123!"
+                },
+                "sales_agent": {
+                    "email": "ariful.sales@padmadigital.example",
+                    "password": "DemoPass123!"
+                }
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Seeder error: {str(e)}"
+        }
+
