@@ -494,7 +494,9 @@ class ProductCreate(BaseModel):
     images: List[str] = []
     description: Optional[str] = None
     specifications: Optional[Dict[str, Any]] = None
+    tags: Optional[List[str]] = []
     is_active: bool = True
+    priority: int = 0
 
 class ProductUpdate(BaseModel):
     title: Optional[str] = None
@@ -507,7 +509,9 @@ class ProductUpdate(BaseModel):
     images: Optional[List[str]] = None
     description: Optional[str] = None
     specifications: Optional[Dict[str, Any]] = None
+    tags: Optional[List[str]] = None
     is_active: Optional[bool] = None
+    priority: Optional[int] = None
 
 class ProductOut(BaseModel):
     id: uuid.UUID
@@ -523,11 +527,22 @@ class ProductOut(BaseModel):
     images: List[str]
     description: Optional[str]
     specifications: Dict[str, Any]
+    tags: List[str] = []
     is_active: bool
+    priority: int
     created_at: datetime
     updated_at: datetime
     class Config:
         from_attributes = True
+
+class ProductGenerateTagsRequest(BaseModel):
+    title: str
+    category: Optional[str] = "General"
+    description: Optional[str] = ""
+    specifications: Optional[Dict[str, Any]] = None
+
+class ProductGenerateTagsResponse(BaseModel):
+    tags: List[str]
 
 class OrderItemIn(BaseModel):
     product_id: str
@@ -605,7 +620,12 @@ class EcommerceSettingsOut(BaseModel):
     sms_notifications_enabled: bool = True
     sms_provider: str = "smsmatrix"
     sms_sender_id_masked: Optional[str] = None
+    sms_api_key_masked: Optional[str] = None
     sms_order_template: Optional[str] = None
+
+class TestSMSRequest(BaseModel):
+    phone_number: str
+    message: Optional[str] = None
 
 class EcommerceSettingsUpdate(BaseModel):
     business_category: Optional[str] = None
@@ -623,6 +643,8 @@ class EcommerceSettingsUpdate(BaseModel):
     sms_provider: Optional[str] = None
     sms_api_key: Optional[str] = None
     sms_sender_id: Optional[str] = None
+    sms_order_template: Optional[str] = None
+
 class SwitchOrderCOD(BaseModel):
     widget_key: str
     visitor_session_id: str

@@ -490,7 +490,9 @@ class Product(Base):
     images: Mapped[List[str]] = mapped_column(JSON, default=list) # Array of image URLs
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     specifications: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict) # color, size, warranty, features
+    tags: Mapped[List[str]] = mapped_column(JSON, default=list) # Multilingual search keywords & synonyms (e.g. ['smartwatch', 'watch', 'ঘড়ি'])
     
+    priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False) # 1=highest, 0=no priority (sorted by created_at)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)

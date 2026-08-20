@@ -46,21 +46,35 @@ async def public_widget_bkash_init(
     subtotal = 0.0
     sanitized_items = []
     for item in payload.items:
-        db_prod = await db.get(Product, item.product_id)
-        unit_price = db_prod.selling_price if db_prod else item.price
+        db_prod = None
+        try:
+            prod_uuid = uuid.UUID(str(item.product_id))
+            db_prod = await db.get(Product, prod_uuid)
+        except Exception:
+            db_prod = None
+
+        unit_price = float(db_prod.selling_price if db_prod and db_prod.selling_price > 0 else (db_prod.unit_price if db_prod else item.price))
         qty = max(1, item.quantity)
-        subtotal += unit_price * qty
+        line_total = unit_price * qty
+        subtotal += line_total
         sanitized_items.append({
             "product_id": str(item.product_id),
             "title": db_prod.title if db_prod else item.title,
             "unit_price": unit_price,
             "quantity": qty,
-            "total": unit_price * qty,
+            "line_total": line_total,
+            "total": line_total,
+            "selected_size": item.selected_size,
+            "selected_color": item.selected_color,
             "image_url": item.image_url or (db_prod.images[0] if db_prod and db_prod.images else "")
         })
 
+    ecom_settings = tenant.ecommerce_settings if tenant and tenant.ecommerce_settings else {}
+    inside_dhaka_fee = float(ecom_settings.get("delivery_charge_inside_dhaka", 60.0))
+    outside_dhaka_fee = float(ecom_settings.get("delivery_charge_outside_dhaka", 120.0))
+
     is_dhaka = "dhaka" in payload.delivery_city.lower()
-    delivery_fee = 60.0 if is_dhaka else 120.0
+    delivery_fee = inside_dhaka_fee if is_dhaka else outside_dhaka_fee
     total_amount = max(1.0, subtotal + delivery_fee)
 
     order_num = f"ORD-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
@@ -388,6 +402,7 @@ async def public_widget_bkash_callback(
 
     else:
         # Payment Cancelled or Failed
+        order_num_val = order.order_number if order else ""
         if order:
             order.tracking_notes = f"bKash Checkout Cancelled or Failed ({status_str})"
             await db.commit()
@@ -411,7 +426,18 @@ async def public_widget_bkash_callback(
             <button class="btn" onclick="window.close()">Close Window</button>
           </div>
           <script>
-            setTimeout(function() {{ window.close(); }}, 3000);
+            try {{
+              if (window.opener) {{
+                window.opener.postMessage({{
+                  type: 'AIAAS_BKASH_PAYMENT_FAILED_OR_CANCELLED',
+                  order_number: '{order_num_val}',
+                  status: '{status_str}'
+                }}, '*');
+              }}
+            }} catch (e) {{
+              console.log(e);
+            }}
+            setTimeout(function() {{ window.close(); }}, 2200);
           </script>
         </body>
         </html>

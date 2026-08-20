@@ -252,6 +252,37 @@
         transform: scale(1.02);
       }
 
+      .aiaas-cart-btn {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: #ffffff;
+        padding: 5px 9px;
+        border-radius: 20px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 700;
+        transition: background 0.2s, transform 0.1s;
+        position: relative;
+        outline: none;
+      }
+      .aiaas-cart-btn:hover {
+        background: rgba(255, 255, 255, 0.35);
+        transform: scale(1.02);
+      }
+      .aiaas-cart-badge {
+        background: #10B981;
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 800;
+        padding: 1px 5px;
+        border-radius: 10px;
+        min-width: 14px;
+        text-align: center;
+      }
+
       .aiaas-close-btn {
         background: rgba(255, 255, 255, 0.2);
         border: none;
@@ -597,29 +628,156 @@
       .aiaas-prod-container {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
         margin-top: 8px;
         width: 100%;
+      }
+      .aiaas-prod-container.scrollable {
+        max-height: 385px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-right: 4px;
+        scroll-behavior: smooth;
+      }
+      .aiaas-prod-container.scrollable::-webkit-scrollbar {
+        width: 5px;
+      }
+      .aiaas-prod-container.scrollable::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.03);
+        border-radius: 4px;
+      }
+      .aiaas-prod-container.scrollable::-webkit-scrollbar-thumb {
+        background: #CBD5E1;
+        border-radius: 4px;
+      }
+      .aiaas-prod-container.scrollable::-webkit-scrollbar-thumb:hover {
+        background: #94A3B8;
+      }
+      .aiaas-prod-scroll-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+        font-weight: 700;
+        color: #475569;
+        padding: 5px 8px;
+        background: #F8FAFC;
+        border: 1px dashed #CBD5E1;
+        border-radius: 8px;
+        margin-bottom: 2px;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+      }
+      /* Order Tracking Card */
+      .aiaas-track-card {
+        background: #ffffff;
+        border: 1px solid #E2E8F0;
+        border-radius: 14px;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        box-shadow: 0 3px 12px rgba(0,0,0,0.05);
+        margin-top: 8px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .aiaas-track-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #F1F5F9;
+      }
+      .aiaas-track-badge {
+        font-size: 9.5px;
+        font-weight: 800;
+        text-transform: uppercase;
+        padding: 2px 7px;
+        border-radius: 6px;
+      }
+      .aiaas-track-badge.pending { background: #FEF3C7; color: #D97706; border: 1px solid #FDE68A; }
+      .aiaas-track-badge.confirmed { background: #E0E7FF; color: #4338CA; border: 1px solid #C7D2FE; }
+      .aiaas-track-badge.shipped { background: #E0F2FE; color: #0369A1; border: 1px solid #BAE6FD; }
+      .aiaas-track-badge.delivered { background: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; }
+      .aiaas-track-badge.cancelled { background: #FEE2E2; color: #DC2626; border: 1px solid #FECACA; }
+
+      .aiaas-stepper-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: relative;
+        margin: 6px 0;
+      }
+      .aiaas-stepper-step {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        z-index: 2;
+      }
+      .aiaas-step-dot {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #E2E8F0;
+        color: #64748B;
+        font-size: 9px;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #ffffff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+      .aiaas-step-dot.active {
+        background: #059669;
+        color: #ffffff;
+      }
+      .aiaas-step-dot.current {
+        background: #059669;
+        color: #ffffff;
+        box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.2);
+        animation: aiaas-pulse-dot 1.5s infinite;
+      }
+      .aiaas-step-label {
+        font-size: 9.5px;
+        font-weight: 700;
+        color: #64748B;
+      }
+      .aiaas-step-label.active {
+        color: #0F172A;
+      }
+      @keyframes aiaas-pulse-dot {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.15); }
       }
       .aiaas-prod-card {
         background: #ffffff;
         border: 1px solid #E2E8F0;
-        border-radius: 12px;
-        padding: 10px;
+        border-radius: 14px;
+        padding: 12px;
         display: flex;
-        align-items: center;
+        flex-direction: column;
         gap: 10px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.04);
-        transition: transform 0.15s;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        transition: transform 0.15s, border-color 0.15s;
       }
       .aiaas-prod-card:hover {
         border-color: #CBD5E1;
         transform: translateY(-1px);
       }
+      .aiaas-prod-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
       .aiaas-prod-img {
-        width: 48px;
-        height: 48px;
-        border-radius: 8px;
+        width: 52px;
+        height: 52px;
+        border-radius: 10px;
         object-fit: cover;
         background: #F1F5F9;
         flex-shrink: 0;
@@ -629,33 +787,162 @@
         min-width: 0;
       }
       .aiaas-prod-title {
-        font-size: 12px;
-        font-weight: 700;
+        font-size: 12.5px;
+        font-weight: 750;
         color: #0F172A;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        line-height: 1.35;
       }
       .aiaas-prod-price {
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 800;
         color: #059669;
-        margin-top: 2px;
+        margin-top: 3px;
+      }
+      .aiaas-prod-variants {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #64748B;
+        flex-wrap: wrap;
+      }
+      .aiaas-variant-chip {
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #CBD5E1;
+        background: #F8FAFC;
+        cursor: pointer;
+        font-size: 10px;
+        font-weight: 700;
+        color: #334155;
+        transition: all 0.15s;
+      }
+      .aiaas-variant-chip.active {
+        background: ${primaryColor};
+        color: #ffffff;
+        border-color: ${primaryColor};
+      }
+      .aiaas-prod-bottom-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #F1F5F9;
+      }
+      .aiaas-qty-picker {
+        display: flex;
+        align-items: center;
+        border: 1px solid #CBD5E1;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #F8FAFC;
+      }
+      .aiaas-qty-btn {
+        background: transparent;
+        border: none;
+        width: 26px;
+        height: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 800;
+        color: #334155;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .aiaas-qty-btn:hover {
+        background: #E2E8F0;
+      }
+      .aiaas-qty-val {
+        width: 24px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 800;
+        color: #0F172A;
+      }
+      .aiaas-btn-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .aiaas-btn-add-cart {
+        background: #F1F5F9;
+        color: #1E293B;
+        border: 1px solid #CBD5E1;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.15s;
+      }
+      .aiaas-btn-add-cart:hover {
+        background: #E2E8F0;
+        border-color: #94A3B8;
       }
       .aiaas-prod-buy-btn {
         background: #059669;
         color: #ffffff;
         border: none;
         border-radius: 8px;
-        padding: 6px 10px;
+        padding: 6px 12px;
         font-size: 11px;
         font-weight: 700;
         cursor: pointer;
-        transition: opacity 0.15s;
+        transition: opacity 0.15s, transform 0.1s;
         flex-shrink: 0;
       }
       .aiaas-prod-buy-btn:hover {
-        opacity: 0.9;
+        opacity: 0.92;
+        transform: translateY(-1px);
+      }
+
+      /* Floating Bottom Cart Bar */
+      .aiaas-cart-bar {
+        background: #0F172A;
+        color: #ffffff;
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-top: 1px solid #334155;
+        box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+        animation: aiaasSlideUp 0.2s ease-out;
+      }
+      .aiaas-cart-bar-info {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .aiaas-cart-bar-count {
+        font-size: 11px;
+        color: #94A3B8;
+        font-weight: 600;
+      }
+      .aiaas-cart-bar-total {
+        font-size: 13px;
+        font-weight: 800;
+        color: #34D399;
+      }
+      .aiaas-cart-bar-btn {
+        background: #059669;
+        color: #ffffff;
+        border: none;
+        border-radius: 10px;
+        padding: 7px 12px;
+        font-size: 11.5px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: opacity 0.15s, transform 0.1s;
+      }
+      .aiaas-cart-bar-btn:hover {
+        opacity: 0.92;
+        transform: scale(1.02);
       }
 
       /* bKash Payment Pending Interactive Card */
@@ -760,6 +1047,57 @@
         color: #0F172A;
       }
 
+      /* Cart Items in Checkout Drawer */
+      .aiaas-cart-item-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 0;
+        border-bottom: 1px solid #F1F5F9;
+      }
+      .aiaas-cart-item-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        min-width: 0;
+      }
+      .aiaas-cart-item-img {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        object-fit: cover;
+        background: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        flex-shrink: 0;
+      }
+      .aiaas-cart-item-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #0F172A;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .aiaas-cart-item-meta {
+        font-size: 11px;
+        color: #64748B;
+        margin-top: 2px;
+      }
+      .aiaas-cart-item-remove {
+        background: transparent;
+        border: none;
+        color: #EF4444;
+        cursor: pointer;
+        padding: 4px;
+        font-size: 14px;
+        transition: opacity 0.15s;
+      }
+      .aiaas-cart-item-remove:hover {
+        opacity: 0.7;
+      }
+
       .aiaas-powered {
         text-align: center;
         font-size: 10px;
@@ -793,6 +1131,9 @@
           </div>
         </div>
         <div class="aiaas-header-actions">
+          <button class="aiaas-cart-btn" id="aiaas-btn-header-cart" title="View Shopping Cart">
+            🛒 <span class="aiaas-cart-badge" id="aiaas-cart-badge" style="display:none;">0</span>
+          </button>
           <button class="aiaas-handover-btn" id="aiaas-btn-handover">👤 Talk to Human</button>
           <button class="aiaas-close-btn">✕</button>
         </div>
@@ -828,6 +1169,15 @@
         <button class="aiaas-chip" id="aiaas-chip-human">👤 Support Agent</button>
       </div>
 
+      <!-- Sticky Bottom Cart Summary Bar (appears when items are in cart) -->
+      <div class="aiaas-cart-bar" id="aiaas-cart-bar" style="display:none;">
+        <div class="aiaas-cart-bar-info">
+          <span class="aiaas-cart-bar-count">🛒 <b id="aiaas-bar-count">0</b> items in cart</span>
+          <span class="aiaas-cart-bar-total" id="aiaas-bar-total">৳0 BDT</span>
+        </div>
+        <button class="aiaas-cart-bar-btn" id="aiaas-btn-bar-checkout">View Cart & Checkout ➔</button>
+      </div>
+
       <!-- Composer Footer -->
       <div class="aiaas-footer" style="display: ${visitorName ? 'flex' : 'none'};">
         <input type="text" class="aiaas-input" placeholder="Type your message..." />
@@ -839,13 +1189,30 @@
       </div>
       <div class="aiaas-powered">⚡ Powered by N.I. BIZ Soft</div>
 
-      <!-- In-Widget 1-Click Instant Checkout Drawer -->
+      <!-- In-Widget Multi-Item Shopping Cart & Checkout Drawer -->
       <div class="aiaas-checkout-drawer" id="aiaas-checkout-modal">
         <div class="aiaas-checkout-header">
-          <div class="aiaas-checkout-title">🛍️ 1-Click Instant Checkout</div>
+          <div class="aiaas-checkout-title">🛍️ Shopping Cart & Checkout (<span id="aiaas-chk-cart-count">0</span>)</div>
           <button class="aiaas-close-btn" style="background:#E2E8F0;color:#0F172A;" id="aiaas-btn-close-checkout">✕</button>
         </div>
-        <div id="aiaas-checkout-product-summary" style="background:#F8FAFC;padding:10px;border-radius:10px;border:1px solid #E2E8F0;margin-bottom:12px;font-size:12px;"></div>
+
+        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;margin-bottom:6px;">Items in Your Cart</div>
+        <div id="aiaas-checkout-items-list" style="background:#F8FAFC;padding:8px 12px;border-radius:12px;border:1px solid #E2E8F0;margin-bottom:12px;max-height:160px;overflow-y:auto;"></div>
+
+        <div style="background:#F1F5F9;padding:10px 12px;border-radius:12px;margin-bottom:12px;font-size:11.5px;display:flex;flex-direction:column;gap:3px;">
+          <div style="display:flex;justify-content:space-between;color:#64748B;">
+            <span>Products Subtotal:</span>
+            <strong style="color:#0F172A;" id="aiaas-chk-subtotal">৳0 BDT</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;color:#64748B;">
+            <span>Estimated Delivery Fee:</span>
+            <strong style="color:#0F172A;" id="aiaas-chk-delivery-fee">৳60 BDT</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;color:#0F172A;padding-top:4px;border-top:1px solid #CBD5E1;margin-top:2px;">
+            <span>Total Payable:</span>
+            <span style="color:#059669;" id="aiaas-chk-total">৳0 BDT</span>
+          </div>
+        </div>
         
         <div class="aiaas-field" style="margin-bottom:10px;">
           <label>Your Full Name *</label>
@@ -866,6 +1233,10 @@
             <option value="Chittagong">Chittagong (৳120 Delivery)</option>
             <option value="Sylhet">Sylhet (৳120 Delivery)</option>
             <option value="Rajshahi">Rajshahi (৳120 Delivery)</option>
+            <option value="Khulna">Khulna (৳120 Delivery)</option>
+            <option value="Barisal">Barisal (৳120 Delivery)</option>
+            <option value="Rangpur">Rangpur (৳120 Delivery)</option>
+            <option value="Mymensingh">Mymensingh (৳120 Delivery)</option>
             <option value="Other">Other City / District (৳120 Delivery)</option>
           </select>
         </div>
@@ -889,6 +1260,7 @@
     var contactInp = win.querySelector("#aiaas-inp-contact");
     var startBtn = win.querySelector("#aiaas-btn-start");
     var handoverBtn = win.querySelector("#aiaas-btn-handover");
+    var btnHeaderCart = win.querySelector("#aiaas-btn-header-cart");
     var statusTxt = win.querySelector("#aiaas-status-txt");
 
     var messagesBox = win.querySelector(".aiaas-messages");
@@ -897,17 +1269,249 @@
     var chipOrder = win.querySelector("#aiaas-chip-order");
     var chipHuman = win.querySelector("#aiaas-chip-human");
 
+    var cartBar = win.querySelector("#aiaas-cart-bar");
+    var btnBarCheckout = win.querySelector("#aiaas-btn-bar-checkout");
+
     var checkoutModal = win.querySelector("#aiaas-checkout-modal");
     var btnCloseCheckout = win.querySelector("#aiaas-btn-close-checkout");
     var btnSubmitOrder = win.querySelector("#aiaas-btn-submit-order");
-    var chkProductSummary = win.querySelector("#aiaas-checkout-product-summary");
+    var chkItemsList = win.querySelector("#aiaas-checkout-items-list");
     var chkName = win.querySelector("#aiaas-chk-name");
     var chkPhone = win.querySelector("#aiaas-chk-phone");
     var chkAddress = win.querySelector("#aiaas-chk-address");
     var chkCity = win.querySelector("#aiaas-chk-city");
     var chkPayment = win.querySelector("#aiaas-chk-payment");
 
-    var activeOrderProduct = null;
+    // Cart State Engine (Persistent in visitor localStorage)
+    var cartItems = [];
+
+    function loadCart() {
+      try {
+        var raw = localStorage.getItem("aiaas_cart_" + widgetKey);
+        if (raw) {
+          cartItems = JSON.parse(raw) || [];
+        }
+      } catch (e) {
+        cartItems = [];
+      }
+      updateCartBadges();
+    }
+
+    function saveCart() {
+      try {
+        localStorage.setItem("aiaas_cart_" + widgetKey, JSON.stringify(cartItems));
+      } catch (e) { }
+      updateCartBadges();
+      renderCartDrawer();
+    }
+
+    function getCartSubtotal() {
+      return cartItems.reduce(function (sum, item) {
+        return sum + ((item.selling_price || item.price || 0) * (item.quantity || 1));
+      }, 0);
+    }
+
+    function getCartCount() {
+      return cartItems.reduce(function (sum, item) {
+        return sum + (item.quantity || 1);
+      }, 0);
+    }
+
+    function showCartToast(msg) {
+      var existingToast = win.querySelector(".aiaas-cart-toast");
+      if (existingToast) existingToast.remove();
+
+      var toast = document.createElement("div");
+      toast.className = "aiaas-cart-toast";
+      toast.innerHTML = msg;
+      win.appendChild(toast);
+      setTimeout(function () {
+        toast.remove();
+      }, 2200);
+    }
+
+    function addToCart(product, qty, size, color) {
+      qty = Math.max(1, parseInt(qty) || 1);
+      var existing = cartItems.find(function (i) {
+        return i.id === product.id && i.selected_size === size && i.selected_color === color;
+      });
+      if (existing) {
+        existing.quantity += qty;
+      } else {
+        cartItems.push({
+          id: product.id,
+          title: product.title,
+          selling_price: product.selling_price || product.unit_price,
+          quantity: qty,
+          selected_size: size || null,
+          selected_color: color || null,
+          image_url: (product.images && product.images[0]) || ""
+        });
+      }
+      saveCart();
+      showCartToast(`Added ${qty}x "${product.title}" to cart! 🛒`);
+    }
+
+    function updateCartQty(index, delta) {
+      if (index >= 0 && index < cartItems.length) {
+        cartItems[index].quantity += delta;
+        if (cartItems[index].quantity <= 0) {
+          cartItems.splice(index, 1);
+        }
+        saveCart();
+      }
+    }
+
+    function removeFromCart(index) {
+      if (index >= 0 && index < cartItems.length) {
+        cartItems.splice(index, 1);
+        saveCart();
+      }
+    }
+
+    function clearCart() {
+      cartItems = [];
+      saveCart();
+    }
+
+    function updateCartBadges() {
+      var count = getCartCount();
+      var subtotal = getCartSubtotal();
+
+      var cartBadge = win.querySelector("#aiaas-cart-badge");
+      var barCount = win.querySelector("#aiaas-bar-count");
+      var barTotal = win.querySelector("#aiaas-bar-total");
+
+      if (cartBadge) {
+        if (count > 0) {
+          cartBadge.textContent = count;
+          cartBadge.style.display = "inline-block";
+        } else {
+          cartBadge.style.display = "none";
+        }
+      }
+
+      if (cartBar) {
+        if (count > 0 && visitorName) {
+          cartBar.style.display = "flex";
+          if (barCount) barCount.textContent = count;
+          if (barTotal) barTotal.textContent = "৳" + subtotal.toLocaleString() + " BDT";
+        } else {
+          cartBar.style.display = "none";
+        }
+      }
+    }
+
+    function renderCartDrawer() {
+      var itemsContainer = win.querySelector("#aiaas-checkout-items-list");
+      var subtotalEl = win.querySelector("#aiaas-chk-subtotal");
+      var deliveryFeeEl = win.querySelector("#aiaas-chk-delivery-fee");
+      var totalEl = win.querySelector("#aiaas-chk-total");
+      var citySelect = win.querySelector("#aiaas-chk-city");
+      var countBadge = win.querySelector("#aiaas-chk-cart-count");
+      var submitBtn = win.querySelector("#aiaas-btn-submit-order");
+
+      if (!itemsContainer) return;
+
+      var count = getCartCount();
+      var subtotal = getCartSubtotal();
+      var isDhaka = citySelect ? (citySelect.value.toLowerCase().indexOf("dhaka") !== -1) : true;
+      var deliveryFee = isDhaka ? 60 : 120;
+      var grandTotal = subtotal > 0 ? (subtotal + deliveryFee) : 0;
+
+      if (countBadge) countBadge.textContent = count;
+      if (subtotalEl) subtotalEl.textContent = "৳" + subtotal.toLocaleString() + " BDT";
+      if (deliveryFeeEl) deliveryFeeEl.textContent = subtotal > 0 ? ("৳" + deliveryFee.toLocaleString() + " BDT") : "৳0 BDT";
+      if (totalEl) totalEl.textContent = "৳" + grandTotal.toLocaleString() + " BDT";
+
+      if (cartItems.length === 0) {
+        itemsContainer.innerHTML = `
+          <div style="text-align:center;padding:20px 10px;color:#94A3B8;">
+            <div style="font-size:32px;margin-bottom:6px;">🛒</div>
+            <div style="font-weight:700;font-size:13px;color:#64748B;">Your cart is currently empty</div>
+            <div style="font-size:11px;margin-top:4px;margin-bottom:12px;">Browse our featured products and add them to your cart.</div>
+            <button id="aiaas-empty-browse-btn" style="background:${primaryColor};color:#ffffff;border:none;border-radius:10px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+              🛍️ Browse Products
+            </button>
+          </div>
+        `;
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.style.opacity = "0.5";
+          submitBtn.textContent = "Cart is Empty";
+        }
+        var emptyBrowseBtn = itemsContainer.querySelector("#aiaas-empty-browse-btn");
+        if (emptyBrowseBtn) {
+          emptyBrowseBtn.addEventListener("click", function () {
+            checkoutModal.classList.remove("open");
+            loadAndRenderProducts();
+          });
+        }
+        return;
+      }
+
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.style.opacity = "1";
+        submitBtn.textContent = "Confirm Order ➔";
+      }
+
+      var html = "";
+      cartItems.forEach(function (item, idx) {
+        var imgHtml = item.image_url ? `<img src="${item.image_url}" class="aiaas-cart-item-img" alt=""/>` : `<div class="aiaas-cart-item-img" style="display:flex;align-items:center;justify-content:center;font-size:16px;">🛍️</div>`;
+        var meta = [];
+        if (item.selected_size) meta.push("Size: " + item.selected_size);
+        if (item.selected_color) meta.push("Color: " + item.selected_color);
+
+        html += `
+          <div class="aiaas-cart-item-row">
+            <div class="aiaas-cart-item-info">
+              ${imgHtml}
+              <div style="min-width:0;">
+                <div class="aiaas-cart-item-title">${item.title}</div>
+                <div class="aiaas-cart-item-meta">৳${item.selling_price.toLocaleString()} ${meta.length > 0 ? '· ' + meta.join(', ') : ''}</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div class="aiaas-qty-picker" style="transform:scale(0.85);transform-origin:right center;">
+                <button class="aiaas-qty-btn aiaas-cart-minus" data-idx="${idx}">−</button>
+                <span class="aiaas-qty-val">${item.quantity}</span>
+                <button class="aiaas-qty-btn aiaas-cart-plus" data-idx="${idx}">+</button>
+              </div>
+              <button class="aiaas-cart-item-remove aiaas-cart-del" data-idx="${idx}" title="Remove item">✕</button>
+            </div>
+          </div>
+        `;
+      });
+
+      itemsContainer.innerHTML = html;
+
+      // Bind events for cart stepper in drawer
+      itemsContainer.querySelectorAll(".aiaas-cart-minus").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var idx = parseInt(btn.getAttribute("data-idx"));
+          updateCartQty(idx, -1);
+        });
+      });
+      itemsContainer.querySelectorAll(".aiaas-cart-plus").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var idx = parseInt(btn.getAttribute("data-idx"));
+          updateCartQty(idx, 1);
+        });
+      });
+      itemsContainer.querySelectorAll(".aiaas-cart-del").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var idx = parseInt(btn.getAttribute("data-idx"));
+          removeFromCart(idx);
+        });
+      });
+    }
+
+    if (chkCity) {
+      chkCity.addEventListener("change", function () {
+        renderCartDrawer();
+      });
+    }
 
     var footerBox = win.querySelector(".aiaas-footer");
     var inputEl = win.querySelector(".aiaas-input");
@@ -965,6 +1569,18 @@
       }
     });
 
+    // Header Cart & Bottom Bar triggers
+    if (btnHeaderCart) {
+      btnHeaderCart.addEventListener("click", function () {
+        openCheckout();
+      });
+    }
+    if (btnBarCheckout) {
+      btnBarCheckout.addEventListener("click", function () {
+        openCheckout();
+      });
+    }
+
     // Start Chat from Pre-Chat Form
     startBtn.addEventListener("click", function () {
       var n = nameInp.value.trim();
@@ -989,6 +1605,7 @@
       footerBox.style.display = "flex";
       inputEl.focus();
 
+      loadCart();
       initSession();
     });
 
@@ -1009,6 +1626,254 @@
       }
     }
 
+    // ----------------- GENERATIVE UI & MICRO-COMPONENT REGISTRY -----------------
+    function createProductCardElement(p, isCompact) {
+      var card = document.createElement("div");
+      card.className = "aiaas-prod-card" + (isCompact ? " compact" : "");
+      var imgHtml = (p.images && p.images[0])
+        ? `<img src="${p.images[0]}" class="aiaas-prod-img" alt=""/>`
+        : `<div class="aiaas-prod-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;">🛍️</div>`;
+
+      // Variant options (sizes)
+      var sizes = [];
+      if (p.specifications && p.specifications.sizes && Array.isArray(p.specifications.sizes)) {
+        sizes = p.specifications.sizes;
+      } else if (p.specifications && p.specifications.size) {
+        sizes = Array.isArray(p.specifications.size) ? p.specifications.size : [p.specifications.size];
+      }
+
+      var variantsHtml = "";
+      if (sizes.length > 0) {
+        variantsHtml = `<div class="aiaas-prod-variants">
+          <span style="font-size:10.5px;color:#64748B;">Size:</span>
+          ${sizes.map(function (s, sIdx) {
+          return `<button class="aiaas-variant-chip ${sIdx === 0 ? 'active' : ''}" data-size="${s}">${s}</button>`;
+        }).join("")}
+        </div>`;
+      }
+
+      var hasDiscount = p.unit_price > p.selling_price && p.selling_price > 0;
+      var discountPercent = hasDiscount ? Math.round(((p.unit_price - p.selling_price) / p.unit_price) * 100) : 0;
+      var priceHtml = `<div class="aiaas-prod-price">৳${(p.selling_price || p.unit_price).toLocaleString()} BDT</div>`;
+      if (hasDiscount) {
+        priceHtml = `
+          <div style="display:flex;align-items:baseline;gap:6px;margin-top:2px;">
+            <span class="aiaas-prod-price">৳${p.selling_price.toLocaleString()} BDT</span>
+            <span style="font-size:11px;color:#94A3B8;text-decoration:line-through;">৳${p.unit_price.toLocaleString()}</span>
+            <span style="font-size:9.5px;font-weight:700;color:#059669;background:#ECFDF5;padding:1px 5px;border-radius:4px;border:1px solid #A7F3D0;">-${discountPercent}%</span>
+          </div>
+        `;
+      }
+
+      var currentQty = Math.max(1, parseInt(p.initial_quantity) || 1);
+      var selectedSize = sizes.length > 0 ? sizes[0] : null;
+
+      card.innerHTML = `
+        <div class="aiaas-prod-header">
+          ${imgHtml}
+          <div class="aiaas-prod-info">
+            <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
+              <span style="font-size:9px;font-weight:800;text-transform:uppercase;color:${primaryColor};background:rgba(79,70,229,0.08);padding:1px 6px;border-radius:4px;">${p.category || 'Product'}</span>
+              ${p.sku ? `<span style="font-size:9px;font-family:monospace;color:#94A3B8;">${p.sku}</span>` : ''}
+            </div>
+            <div class="aiaas-prod-title">${p.title}</div>
+            ${priceHtml}
+          </div>
+        </div>
+        ${variantsHtml}
+        <div class="aiaas-prod-bottom-row">
+          <div class="aiaas-qty-picker">
+            <button class="aiaas-qty-btn aiaas-btn-minus">−</button>
+            <span class="aiaas-qty-val">${currentQty}</span>
+            <button class="aiaas-qty-btn aiaas-btn-plus">+</button>
+          </div>
+          <div class="aiaas-btn-actions" style="display:flex;align-items:center;gap:6px;flex:1;">
+            <button class="aiaas-btn-add-cart" style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:7px 8px;font-size:11px;font-weight:700;background:#F1F5F9;border:1px solid #CBD5E1;border-radius:8px;cursor:pointer;color:#1E293B;">
+              🛒 Add to Cart
+            </button>
+            <button class="aiaas-prod-buy-btn" style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:7px 10px;font-size:11px;font-weight:700;background:#059669;color:#ffffff;border:none;border-radius:8px;cursor:pointer;">
+              ⚡ Buy Now
+            </button>
+          </div>
+        </div>
+      `;
+
+      // Size chips
+      card.querySelectorAll(".aiaas-variant-chip").forEach(function (chip) {
+        chip.addEventListener("click", function () {
+          card.querySelectorAll(".aiaas-variant-chip").forEach(function (c) { c.classList.remove("active"); });
+          chip.classList.add("active");
+          selectedSize = chip.getAttribute("data-size");
+        });
+      });
+
+      // Quantity Stepper
+      var minusBtn = card.querySelector(".aiaas-btn-minus");
+      var plusBtn = card.querySelector(".aiaas-btn-plus");
+      var qtyVal = card.querySelector(".aiaas-qty-val");
+
+      minusBtn.addEventListener("click", function () {
+        if (currentQty > 1) {
+          currentQty--;
+          qtyVal.textContent = currentQty;
+        }
+      });
+      plusBtn.addEventListener("click", function () {
+        currentQty++;
+        qtyVal.textContent = currentQty;
+      });
+
+      // Add to Cart button
+      var addBtn = card.querySelector(".aiaas-btn-add-cart");
+      if (addBtn) {
+        addBtn.addEventListener("click", function () {
+          addToCart(p, currentQty, selectedSize);
+        });
+      }
+
+      // Buy Now button (1-click purchase)
+      var buyBtn = card.querySelector(".aiaas-prod-buy-btn");
+      if (buyBtn) {
+        buyBtn.addEventListener("click", function () {
+          addToCart(p, currentQty, selectedSize);
+          openCheckout();
+        });
+      }
+
+      return card;
+    }
+
+    function renderInteractiveProductCard(product) {
+      if (!product) return null;
+      var container = document.createElement("div");
+      container.className = "aiaas-prod-container";
+      container.style.marginTop = "8px";
+      var card = createProductCardElement(product, false);
+      container.appendChild(card);
+      return container;
+    }
+
+    function renderInteractiveCarousel(productsList) {
+      if (!productsList || !productsList.length) return null;
+      var container = document.createElement("div");
+      var isScrollable = productsList.length > 3;
+      container.className = "aiaas-prod-container" + (isScrollable ? " scrollable" : "");
+      container.style.marginTop = "8px";
+
+      if (isScrollable) {
+        var headerBar = document.createElement("div");
+        headerBar.className = "aiaas-prod-scroll-header";
+        headerBar.innerHTML = `
+          <span>🛍️ <b>${productsList.length}</b> Products Available</span>
+          <span style="font-size:10px;color:#64748B;font-weight:600;display:flex;align-items:center;gap:3px;">Scroll down for more ↕</span>
+        `;
+        container.appendChild(headerBar);
+      }
+
+      productsList.forEach(function (p) {
+        var card = createProductCardElement(p, true);
+        container.appendChild(card);
+      });
+      return container;
+    }
+
+    function renderOrderTrackingCard(o) {
+      if (!o) return null;
+      var card = document.createElement("div");
+      card.className = "aiaas-track-card";
+
+      var status = (o.order_status || "pending").toLowerCase();
+      var statusLabels = {
+        "pending": "🟡 Placed",
+        "confirmed": "🔵 Confirmed",
+        "shipped": "🚚 In Transit / Shipped",
+        "delivered": "🟢 Delivered",
+        "cancelled": "🔴 Cancelled"
+      };
+      var statusBadgeText = statusLabels[status] || "📦 " + status.toUpperCase();
+
+      var stepIndex = 1;
+      if (status === "confirmed") stepIndex = 2;
+      else if (status === "shipped") stepIndex = 3;
+      else if (status === "delivered") stepIndex = 4;
+
+      var steps = [
+        { label: "Placed", num: 1 },
+        { label: "Confirmed", num: 2 },
+        { label: "Shipped", num: 3 },
+        { label: "Delivered", num: 4 }
+      ];
+
+      var stepperHtml = `
+        <div class="aiaas-stepper-wrap">
+          <div style="position:absolute;top:9px;left:10%;right:10%;height:2px;background:#E2E8F0;z-index:1;"></div>
+          <div style="position:absolute;top:9px;left:10%;width:${((stepIndex - 1) / 3) * 80}%;height:2px;background:#059669;z-index:1;transition:width 0.3s;"></div>
+          ${steps.map(function (s) {
+        var isPassed = s.num <= stepIndex;
+        var isCurrent = s.num === stepIndex;
+        return `
+              <div class="aiaas-stepper-step">
+                <div class="aiaas-step-dot ${isPassed ? 'active' : ''} ${isCurrent ? 'current' : ''}">
+                  ${isPassed ? '✓' : s.num}
+                </div>
+                <span class="aiaas-step-label ${isPassed ? 'active' : ''}">${s.label}</span>
+              </div>
+            `;
+      }).join("")}
+        </div>
+      `;
+
+      var itemsHtml = "";
+      if (o.items && o.items.length) {
+        itemsHtml = `
+          <div style="background:#F8FAFC;padding:8px;border-radius:8px;font-size:11px;color:#334155;display:flex;flex-direction:column;gap:4px;">
+            ${o.items.map(function (it) {
+              var itemTotal = it.line_total || it.total || ((it.unit_price || it.price || 0) * (it.quantity || 1));
+              var sizeText = it.selected_size || it.size ? " (" + (it.selected_size || it.size) + ")" : "";
+              return `<div style="display:flex;justify-content:space-between;align-items:center;"><span>${it.quantity}x ${it.title}${sizeText}</span><b>৳${Number(itemTotal).toLocaleString()}</b></div>`;
+            }).join("")}
+          </div>
+        `;
+      }
+
+      var payText = o.payment_method === "bkash" ? "📱 bKash (" + (o.payment_status || "Paid") + ")" : "💵 Cash on Delivery";
+
+      card.innerHTML = `
+        <div class="aiaas-track-header">
+          <div>
+            <span style="font-size:10px;font-family:monospace;font-weight:800;color:${primaryColor};background:rgba(79,70,229,0.08);padding:2px 6px;border-radius:4px;">${o.order_number}</span>
+            <div style="font-size:10px;color:#94A3B8;margin-top:2px;">${o.customer_name} • ${o.delivery_city}</div>
+          </div>
+          <span class="aiaas-track-badge ${status}">${statusBadgeText}</span>
+        </div>
+        ${stepperHtml}
+        ${itemsHtml}
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;padding-top:4px;border-top:1px dashed #E2E8F0;">
+          <span style="color:#64748B;">Total Amount:</span>
+          <span style="font-weight:800;color:#059669;">৳${(o.total_amount || 0).toLocaleString()} BDT <span style="font-size:10px;color:#64748B;font-weight:500;">(${payText})</span></span>
+        </div>
+        <div style="font-size:10.5px;color:#475569;background:#F1F5F9;padding:6px 8px;border-radius:6px;">
+          📍 <b>Address:</b> ${o.delivery_address}<br/>
+          ℹ️ <b>Status Note:</b> ${o.tracking_notes || "Scheduled for courier dispatch."}
+        </div>
+      `;
+
+      return card;
+    }
+
+    // Micro-Component Registry for 100+ Future Generative UI Modules
+    var UI_COMPONENTS = {
+      "product_card": function (data) {
+        return renderInteractiveProductCard(data.product);
+      },
+      "product_carousel": function (data) {
+        return renderInteractiveCarousel(data.products);
+      },
+      "order_tracking_card": function (data) {
+        return renderOrderTrackingCard(data.order);
+      }
+    };
+
     function appendProductCarousel(productsList) {
       var wrapper = document.createElement("div");
       wrapper.className = "aiaas-msg ai";
@@ -1018,43 +1883,19 @@
       authorDiv.textContent = "🛍️ Featured Store Products";
       wrapper.appendChild(authorDiv);
 
-      var container = document.createElement("div");
-      container.className = "aiaas-prod-container";
+      var comp = renderInteractiveCarousel(productsList);
+      if (comp) {
+        wrapper.appendChild(comp);
+      }
 
-      productsList.forEach(function (p) {
-        var card = document.createElement("div");
-        card.className = "aiaas-prod-card";
-        var imgHtml = (p.images && p.images[0]) ? `<img src="${p.images[0]}" class="aiaas-prod-img" alt=""/>` : `<div class="aiaas-prod-img" style="display:flex;align-items:center;justify-content:center;font-size:20px;">🛍️</div>`;
-        card.innerHTML = `
-          ${imgHtml}
-          <div class="aiaas-prod-info">
-            <div class="aiaas-prod-title">${p.title}</div>
-            <div class="aiaas-prod-price">৳${p.selling_price.toLocaleString()} BDT</div>
-          </div>
-          <button class="aiaas-prod-buy-btn">Order Now</button>
-        `;
-
-        var orderBtn = card.querySelector(".aiaas-prod-buy-btn");
-        orderBtn.addEventListener("click", function () {
-          openCheckout(p);
-        });
-
-        container.appendChild(card);
-      });
-
-      wrapper.appendChild(container);
       messagesBox.appendChild(wrapper);
       messagesBox.scrollTop = messagesBox.scrollHeight;
     }
 
-    function openCheckout(product) {
-      activeOrderProduct = product;
-      chkProductSummary.innerHTML = `
-        <div style="font-weight:700;color:#0F172A;">${product.title}</div>
-        <div style="color:#059669;font-weight:800;margin-top:2px;">Price: ৳${product.selling_price.toLocaleString()} BDT</div>
-      `;
-      chkName.value = visitorName || "";
-      chkPhone.value = visitorContact || "";
+    function openCheckout() {
+      chkName.value = visitorName || chkName.value || "";
+      chkPhone.value = visitorContact || chkPhone.value || "";
+      renderCartDrawer();
       checkoutModal.classList.add("open");
     }
 
@@ -1066,7 +1907,11 @@
 
     if (btnSubmitOrder) {
       btnSubmitOrder.addEventListener("click", async function () {
-        if (!activeOrderProduct) return;
+        if (cartItems.length === 0) {
+          alert("Your shopping cart is empty!");
+          return;
+        }
+
         var name = chkName.value.trim();
         var phone = chkPhone.value.trim();
         var address = chkAddress.value.trim();
@@ -1079,6 +1924,18 @@
 
         btnSubmitOrder.disabled = true;
         btnSubmitOrder.textContent = "Processing Order...";
+
+        var itemsPayload = cartItems.map(function (item) {
+          return {
+            product_id: item.id,
+            title: item.title,
+            price: item.selling_price,
+            quantity: item.quantity,
+            selected_size: item.selected_size,
+            selected_color: item.selected_color,
+            image_url: item.image_url
+          };
+        });
 
         try {
           if (paymentMethod === "bkash") {
@@ -1093,20 +1950,26 @@
                 delivery_address: address,
                 delivery_city: city,
                 payment_method: "bkash",
-                items: [{
-                  product_id: activeOrderProduct.id,
-                  title: activeOrderProduct.title,
-                  price: activeOrderProduct.selling_price,
-                  quantity: 1,
-                  image_url: (activeOrderProduct.images && activeOrderProduct.images[0]) || ""
-                }]
+                items: itemsPayload
               })
             });
 
             if (res.ok) {
               var bkData = await res.json();
               checkoutModal.classList.remove("open");
-              
+              clearCart();
+
+              if (!visitorName && name) {
+                visitorName = name;
+                visitorContact = phone;
+                localStorage.setItem("aiaas_vis_name_" + widgetKey, name);
+                localStorage.setItem("aiaas_vis_contact_" + widgetKey, phone);
+                if (prechatBox) prechatBox.style.display = "none";
+                if (messagesBox) messagesBox.style.display = "flex";
+                if (chipsBox) chipsBox.style.display = "flex";
+                if (footerBox) footerBox.style.display = "flex";
+              }
+
               // Append Interactive bKash Pending Card with Retry & Switch-to-COD Buttons
               appendBkashPendingCard(bkData);
 
@@ -1129,20 +1992,32 @@
                 delivery_address: address,
                 delivery_city: city,
                 payment_method: "cash_on_delivery",
-                items: [{
-                  product_id: activeOrderProduct.id,
-                  title: activeOrderProduct.title,
-                  price: activeOrderProduct.selling_price,
-                  quantity: 1,
-                  image_url: (activeOrderProduct.images && activeOrderProduct.images[0]) || ""
-                }]
+                items: itemsPayload
               })
             });
 
             if (res.ok) {
               var orderData = await res.json();
               checkoutModal.classList.remove("open");
-              appendMessage(`🎉 **Order Placed Successfully!**\n\n- **Order #:** \`${orderData.order_number}\`\n- **Total Amount:** ৳${orderData.total_amount.toLocaleString()} BDT (Including Delivery ৳${orderData.delivery_charge.toLocaleString()})\n- **Delivery Address:** ${orderData.delivery_address}, ${orderData.delivery_city}\n- **Payment Method:** 💵 Cash on Delivery (COD)\n- **SMS:** Confirmation sent to \`${orderData.customer_phone}\``, "system", "Order Desk");
+              clearCart();
+
+              // If visitor info was not set yet, update it
+              if (!visitorName && name) {
+                visitorName = name;
+                visitorContact = phone;
+                localStorage.setItem("aiaas_vis_name_" + widgetKey, name);
+                localStorage.setItem("aiaas_vis_contact_" + widgetKey, phone);
+                if (prechatBox) prechatBox.style.display = "none";
+                if (messagesBox) messagesBox.style.display = "flex";
+                if (chipsBox) chipsBox.style.display = "flex";
+                if (footerBox) footerBox.style.display = "flex";
+              }
+
+              var itemsSummary = orderData.items_json.map(function (it) {
+                return `  • **${it.title}** (x${it.quantity}) - ৳${(it.unit_price * it.quantity).toLocaleString()} BDT`;
+              }).join("\n");
+
+              appendMessage(`🎉 **Order Placed Successfully!**\n\n- **Order #:** \`${orderData.order_number}\`\n- **Items Ordered (${orderData.items_json.length}):**\n${itemsSummary}\n- **Delivery Charge:** ৳${orderData.delivery_charge.toLocaleString()} BDT\n- **Total Amount:** **৳${orderData.total_amount.toLocaleString()} BDT**\n- **Delivery Address:** ${orderData.delivery_address}, ${orderData.delivery_city}\n- **Payment Method:** 💵 Cash on Delivery (COD)\n- **SMS Notification:** Dispatched to \`${orderData.customer_phone}\``, "system", "Order Desk");
             } else {
               var err = await res.json().catch(() => ({}));
               alert(err.detail || "Could not place order. Please try again.");
@@ -1156,6 +2031,9 @@
         }
       });
     }
+
+    // Load persisted cart on init
+    loadCart();
 
     if (chipProducts) {
       chipProducts.addEventListener("click", function () {
@@ -1173,11 +2051,18 @@
       });
     }
 
-    // Render Interactive bKash Pending Action Card
+    // Render Interactive bKash Pending Action Card with 5-Minute Auto-Expiry Timer
     function appendBkashPendingCard(bkData) {
       var ordNum = bkData.order_number || bkData.merchantInvoiceNumber;
       var totalAmt = bkData.total_amount ? Number(bkData.total_amount).toLocaleString() : "0";
       var currentBkashUrl = bkData.bkashURL || "";
+
+      // Remove previous pending card if any
+      var prevCard = win.querySelector("#aiaas-pay-card-" + ordNum);
+      if (prevCard) {
+        if (prevCard._timerInterval) clearInterval(prevCard._timerInterval);
+        prevCard.remove();
+      }
 
       var cardDiv = document.createElement("div");
       cardDiv.className = "aiaas-msg system";
@@ -1188,10 +2073,10 @@
         <div class="aiaas-msg-body">
           <div class="aiaas-pay-action-card">
             <div class="aiaas-pay-action-title">
-              <span>📱 bKash Payment Pending</span>
+              <span id="aiaas-pay-title-${ordNum}">📱 bKash Payment Pending</span>
               <span style="margin-left:auto; font-size:11px; background:#FCE7F3; color:#BE185D; padding:2px 8px; border-radius:12px;">৳${totalAmt} BDT</span>
             </div>
-            <div class="aiaas-pay-action-desc">
+            <div class="aiaas-pay-action-desc" id="aiaas-pay-desc-${ordNum}">
               Order #<strong>${ordNum}</strong> initiated. If your bKash payment window closed or timed out, click below to re-open or switch to Cash on Delivery:
             </div>
             <div class="aiaas-pay-btn-group" id="aiaas-btn-grp-${ordNum}">
@@ -1202,6 +2087,10 @@
                 💵 Switch to Cash on Delivery
               </button>
             </div>
+            <div class="aiaas-pay-timer" style="font-size:11px;color:#9D174D;margin-top:8px;padding-top:6px;border-top:1px dashed #FBCFE8;display:flex;align-items:center;justify-content:space-between;">
+              <span>⏳ bKash session expires in:</span>
+              <strong id="aiaas-timer-${ordNum}" style="font-family:monospace;font-size:12px;background:#FCE7F3;padding:1px 6px;border-radius:6px;color:#BE185D;">05:00</strong>
+            </div>
           </div>
         </div>
       `;
@@ -1209,8 +2098,50 @@
       messagesBox.appendChild(cardDiv);
       messagesBox.scrollTop = messagesBox.scrollHeight;
 
-      // Event: Re-open bKash Checkout
+      // 5-Minute Auto-Expiry Timer Countdown
+      var timeLeftSeconds = 300; // 5 minutes
+      var timerEl = cardDiv.querySelector("#aiaas-timer-" + ordNum);
+      var titleEl = cardDiv.querySelector("#aiaas-pay-title-" + ordNum);
+      var descEl = cardDiv.querySelector("#aiaas-pay-desc-" + ordNum);
       var btnReopen = cardDiv.querySelector("#btn-reopen-" + ordNum);
+      var btnSwitch = cardDiv.querySelector("#btn-switch-cod-" + ordNum);
+
+      var timerInterval = setInterval(function () {
+        timeLeftSeconds--;
+        if (timeLeftSeconds <= 0) {
+          clearInterval(timerInterval);
+          if (timerEl) {
+            timerEl.textContent = "EXPIRED";
+            timerEl.style.background = "#FEE2E2";
+            timerEl.style.color = "#DC2626";
+          }
+          if (titleEl) {
+            titleEl.innerHTML = "⚠️ bKash Session Expired";
+          }
+          if (descEl) {
+            descEl.innerHTML = `bKash payment session for order #<strong>${ordNum}</strong> has expired. Click below to convert your order to <strong>Cash on Delivery (COD)</strong>:`;
+          }
+          if (btnReopen) {
+            btnReopen.style.display = "none";
+          }
+          if (btnSwitch) {
+            btnSwitch.style.background = "#059669";
+            btnSwitch.style.color = "#ffffff";
+            btnSwitch.style.border = "none";
+            btnSwitch.innerHTML = "🚀 Confirm as Cash on Delivery ➔";
+          }
+        } else {
+          var mins = Math.floor(timeLeftSeconds / 60);
+          var secs = timeLeftSeconds % 60;
+          if (timerEl) {
+            timerEl.textContent = (mins < 10 ? "0" : "") + mins + ":" + (secs < 10 ? "0" : "") + secs;
+          }
+        }
+      }, 1000);
+
+      cardDiv._timerInterval = timerInterval;
+
+      // Event: Re-open bKash Checkout
       if (btnReopen) {
         btnReopen.addEventListener("click", async function () {
           btnReopen.disabled = true;
@@ -1228,9 +2159,12 @@
             var data = await res.json();
             if (data.status === "already_paid") {
               // Order was already paid! Remove retry card
+              if (cardDiv._timerInterval) clearInterval(cardDiv._timerInterval);
               cardDiv.remove();
               appendMessage(`🎉 **Order #${ordNum} is already verified and PAID!**`, "system", "bKash Verified");
             } else if (data.bkashURL) {
+              // Reset timer on re-attempt
+              timeLeftSeconds = 300;
               window.open(data.bkashURL, "bKashPayment", "width=460,height=660");
             } else {
               window.open(currentBkashUrl, "bKashPayment", "width=460,height=660");
@@ -1245,7 +2179,6 @@
       }
 
       // Event: Switch to Cash on Delivery
-      var btnSwitch = cardDiv.querySelector("#btn-switch-cod-" + ordNum);
       if (btnSwitch) {
         btnSwitch.addEventListener("click", async function () {
           btnSwitch.disabled = true;
@@ -1262,7 +2195,7 @@
             });
             if (res.ok) {
               var data = await res.json();
-              // Remove the pending bKash card completely
+              if (cardDiv._timerInterval) clearInterval(cardDiv._timerInterval);
               cardDiv.remove();
               appendMessage(
                 `🎉 **Payment Method Switched to Cash on Delivery!**\n\n` +
@@ -1302,12 +2235,13 @@
       }
     }
 
-    // Message Appender with Open-Source marked.js Markdown, WhatsApp Date/Time & Anti-Duplication
-    function appendMessage(text, sender, author, timestamp) {
-      if (!text) return;
-      var trimmed = text.trim();
+    // Message Appender with Open-Source marked.js Markdown, WhatsApp Date/Time, Generative UI Components & Anti-Duplication
+    function appendMessage(text, sender, author, timestamp, uiComponent) {
+      if (!text && !uiComponent) return;
+      var trimmed = (text || "").trim();
       var now = Date.now();
-      var dedupeKey = sender + ":::" + trimmed;
+      var compKey = uiComponent ? JSON.stringify(uiComponent) : "";
+      var dedupeKey = sender + ":::" + trimmed + ":::" + compKey;
 
       for (var i = recentMessages.length - 1; i >= 0; i--) {
         if (recentMessages[i].key === dedupeKey && (now - recentMessages[i].time < 10000)) {
@@ -1320,16 +2254,35 @@
       var msg = document.createElement("div");
       msg.className = "aiaas-msg " + sender;
 
-      var renderedHtml = renderMarkdown(trimmed);
+      var renderedHtml = trimmed ? renderMarkdown(trimmed) : "";
       var timeStr = formatMessageTime(timestamp);
       var checkHtml = sender === "visitor" ? '<span class="aiaas-msg-check">✓✓</span>' : '';
       var metaHtml = `<div class="aiaas-msg-meta"><span class="aiaas-msg-time">${timeStr}</span>${checkHtml}</div>`;
+      var bodyHtml = renderedHtml ? `<div class="aiaas-msg-body" data-raw="${encodeURIComponent(trimmed)}">${renderedHtml}</div>` : "";
 
       if (author && sender !== "visitor") {
-        msg.innerHTML = `<div class="aiaas-msg-author">${author}</div><div class="aiaas-msg-body" data-raw="${encodeURIComponent(trimmed)}">${renderedHtml}</div>${metaHtml}`;
+        msg.innerHTML = `<div class="aiaas-msg-author">${author}</div>${bodyHtml}${metaHtml}`;
       } else {
-        msg.innerHTML = `<div class="aiaas-msg-body" data-raw="${encodeURIComponent(trimmed)}">${renderedHtml}</div>${metaHtml}`;
+        msg.innerHTML = `${bodyHtml}${metaHtml}`;
       }
+
+      // Render Generative UI Component if attached
+      if (uiComponent && uiComponent.type && UI_COMPONENTS[uiComponent.type]) {
+        try {
+          var compEl = UI_COMPONENTS[uiComponent.type](uiComponent.data);
+          if (compEl) {
+            var metaEl = msg.querySelector(".aiaas-msg-meta");
+            if (metaEl) {
+              msg.insertBefore(compEl, metaEl);
+            } else {
+              msg.appendChild(compEl);
+            }
+          }
+        } catch (e) {
+          console.error("Generative UI component render error:", e);
+        }
+      }
+
       messagesBox.appendChild(msg);
       messagesBox.scrollTop = messagesBox.scrollHeight;
     }
@@ -1376,7 +2329,7 @@
               }
             } else if (data.event === "message" && data.sender_type !== "visitor") {
               hideTyping();
-              appendMessage(data.content, data.sender_type, data.sender_name || (data.sender_type === "ai" ? "Gemini AI" : "Support Agent"), data.created_at);
+              appendMessage(data.content, data.sender_type, data.sender_name || (data.sender_type === "ai" ? "Gemini AI" : "Support Agent"), data.created_at, data.ui_component);
             }
           } catch (err) {
             console.error(err);
@@ -1431,7 +2384,7 @@
         if (data.messages && data.messages.length > 0) {
           messagesBox.innerHTML = "";
           data.messages.forEach(function (m) {
-            appendMessage(m.content, m.sender_type, m.sender_name, m.created_at);
+            appendMessage(m.content, m.sender_type, m.sender_name, m.created_at, m.ui_component);
           });
         } else {
           var welcomeMsg = visitorName
@@ -1472,7 +2425,7 @@
         if (data.is_handover_requested) {
           updateAIStatusUI(true);
         } else if (data.ai_response) {
-          appendMessage(data.ai_response, "ai", "AI Assistant");
+          appendMessage(data.ai_response, "ai", "AI Assistant", null, data.ui_component);
         }
       } catch (err) {
         hideTyping();
@@ -1490,7 +2443,9 @@
 
     // Listen for Real-Time bKash Popup PostMessage Events
     window.addEventListener("message", function (event) {
-      if (event && event.data && event.data.type === "AIAAS_BKASH_PAYMENT_SUCCESS") {
+      if (!event || !event.data) return;
+
+      if (event.data.type === "AIAAS_BKASH_PAYMENT_SUCCESS") {
         var ordNum = event.data.order_number || "ORD-CONFIRMED";
         var trx = event.data.trx_id || "TRX-VERIFIED";
         var amt = event.data.amount || "";
@@ -1498,6 +2453,7 @@
         // Remove Pending bKash Card if present in DOM
         var pendingCard = win.querySelector("#aiaas-pay-card-" + ordNum);
         if (pendingCard) {
+          if (pendingCard._timerInterval) clearInterval(pendingCard._timerInterval);
           pendingCard.remove();
         }
 
@@ -1511,6 +2467,25 @@
           "system",
           "bKash Verified"
         );
+      } else if (event.data.type === "AIAAS_BKASH_PAYMENT_FAILED_OR_CANCELLED") {
+        var ordNum = event.data.order_number;
+        if (ordNum) {
+          var pendingCard = win.querySelector("#aiaas-pay-card-" + ordNum);
+          if (pendingCard) {
+            var titleEl = pendingCard.querySelector("#aiaas-pay-title-" + ordNum);
+            var descEl = pendingCard.querySelector("#aiaas-pay-desc-" + ordNum);
+            var btnSwitch = pendingCard.querySelector("#btn-switch-cod-" + ordNum);
+
+            if (titleEl) titleEl.innerHTML = "⚠️ bKash Payment Cancelled";
+            if (descEl) descEl.innerHTML = `bKash payment for order #<strong>${ordNum}</strong> was cancelled or closed. You can re-open checkout or switch to <strong>Cash on Delivery (COD)</strong>:`;
+            if (btnSwitch) {
+              btnSwitch.style.background = "#059669";
+              btnSwitch.style.color = "#ffffff";
+              btnSwitch.style.border = "none";
+              btnSwitch.innerHTML = "💵 Switch to Cash on Delivery ➔";
+            }
+          }
+        }
       }
     });
 

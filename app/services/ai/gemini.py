@@ -5,11 +5,70 @@ from typing import List, Dict, Any, AsyncGenerator, Optional
 from openai import AsyncOpenAI
 from app.core.config import settings
 
+COMMERCE_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "show_product_card",
+            "description": "Call this to display an interactive product card when the customer asks about, selects, or wants to buy a specific individual product in Bengali, Banglish, or English. Extract the core English/Bengali product keywords (e.g. 'panjabi', 'smartwatch', 'earbuds', 'kabli', 'jamdani saree', 'polo t-shirt', 'kurti', 'soundbar', 'headphones', 'power bank', 'gaming keyboard', 'oxford shoe', 'sneakers', 'laptop bag', 'wallet', 'diffuser', 'flask').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "product_query": {
+                        "type": "string",
+                        "description": "The normalized search keywords or product name requested by user (e.g. 'panjabi', 'smartwatch pro', 'jamdani saree', 'sneakers', 'diffuser', 'soundbar', 'wallet')"
+                    },
+                    "quantity": {
+                        "type": "integer",
+                        "description": "Quantity or units requested if mentioned (e.g. 1, 2, 5). Defaults to 1."
+                    }
+                },
+                "required": ["product_query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "show_product_catalog",
+            "description": "Call this to display an interactive scrollable multi-product carousel when the customer asks for a category of items or general collections (e.g. 'all smartwatches', 'shoes collection', 'audio devices', 'fashion clothes', 'all products').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "description": "Category or item type requested: 'Smartwatch', 'Footwear', 'Fashion', 'Audio', 'Gadgets', 'Bags', 'Home', or 'all' for storewide catalog."
+                    }
+                },
+                "required": ["category"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "track_customer_order",
+            "description": "Call this to display the live order tracking card with stepper progress when the customer asks to track their order, check parcel status, courier delivery, or provides an order number (e.g. 'ORD-20260820-AEB2').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "order_number": {
+                        "type": "string",
+                        "description": "The order number if mentioned (e.g. 'ORD-20260820-AEB2')"
+                    }
+                }
+            }
+        }
+    }
+]
+
+
 class GeminiService:
     """
     Enterprise-grade AI abstraction powered by OpenAI SDK & Gemini:
     - Directly connects via AsyncOpenAI SDK to any OpenAI-compatible base URL (e.g. gemini-web2api)
     - Supports Google Gemini models: gemini-3.6-flash, gemini-1.5-flash, gemini-1.5-pro, etc.
+    - Native OpenAI SDK Function Calling (Tools) for Conversational E-Commerce
     - Full RAG knowledge base context injection
     - Token metering & latency calculation
     """
@@ -113,10 +172,11 @@ class GeminiService:
         rag_context: Optional[str] = None,
         model: Optional[str] = None,
         temperature: float = 0.3,
-        max_output_tokens: int = 1024
+        max_output_tokens: int = 1024,
+        tools: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
-        Orchestrates AI response generation using OpenAI SDK with System Prompt and RAG context.
+        Orchestrates AI response generation using OpenAI SDK with System Prompt, RAG context, and Function Calling Tools.
         """
         start_time = time.time()
         target_model = model or self.model or "gemini-3.6-flash"
@@ -145,14 +205,35 @@ class GeminiService:
 
         if self.client:
             try:
-                response = await self.client.chat.completions.create(
-                    model=target_model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_output_tokens
-                )
-                content = response.choices[0].message.content or ""
+                kwargs: Dict[str, Any] = {
+                    "model": target_model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_output_tokens,
+                }
+                if tools:
+                    kwargs["tools"] = tools
+                    kwargs["tool_choice"] = "auto"
+
+                response = await self.client.chat.completions.create(**kwargs)
+                choice_msg = response.choices[0].message
+                content = choice_msg.content or ""
                 latency = int((time.time() - start_time) * 1000)
+
+                tool_calls: List[Dict[str, Any]] = []
+                if getattr(choice_msg, "tool_calls", None):
+                    for tc in choice_msg.tool_calls:
+                        fn_args = tc.function.arguments
+                        if isinstance(fn_args, str):
+                            try:
+                                fn_args = json.loads(fn_args)
+                            except Exception:
+                                fn_args = {}
+                        tool_calls.append({
+                            "id": tc.id,
+                            "name": tc.function.name,
+                            "arguments": fn_args or {}
+                        })
                 
                 prompt_tokens = response.usage.prompt_tokens if (response.usage and response.usage.prompt_tokens) else calculated_prompt_tokens
                 completion_tokens = response.usage.completion_tokens if (response.usage and response.usage.completion_tokens) else count_tokens(content)
@@ -175,6 +256,7 @@ class GeminiService:
 
                 return {
                     "text": content,
+                    "tool_calls": tool_calls,
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
                     "total_tokens": total_tokens,

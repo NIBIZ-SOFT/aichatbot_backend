@@ -802,7 +802,8 @@ async def get_token_telemetry(
                 "cost_bdt": cost_bdt
             },
             "rag_percentage": rag_pct,
-            "optimization_tip": tip
+            "optimization_tip": tip,
+            "ui_component": meta.get("ui_component")
         })
 
     # Summary distribution percentages

@@ -1208,8 +1208,8 @@ async def get_public_platform_theme(db: AsyncSession = Depends(get_db)):
         **THEME_PRESETS[0],
         "platform_name": "Enterprise AIaaS",
         "platform_tagline": "Autonomous Customer Communication & Sales Cloud",
-        "logo_url": "",
-        "favicon_url": "",
+        "logo_url": "https://iili.io/CsuMe3l.png",
+        "favicon_url": "https://iili.io/CsuMe3l.png",
         "widget_avatar_url": "",
         "footer_text": "© 2026 Enterprise AIaaS Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI",
         "support_email": "support@enterprise.example"
@@ -1236,8 +1236,8 @@ async def get_superadmin_theme(
         **THEME_PRESETS[0],
         "platform_name": "Enterprise AIaaS",
         "platform_tagline": "Autonomous Customer Communication & Sales Cloud",
-        "logo_url": "",
-        "favicon_url": "",
+        "logo_url": "https://iili.io/CsuMe3l.png",
+        "favicon_url": "https://iili.io/CsuMe3l.png",
         "widget_avatar_url": "",
         "footer_text": "© 2026 Enterprise AIaaS Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI",
         "support_email": "support@enterprise.example"

@@ -179,6 +179,55 @@ class OrderService:
 
         return order
 
+    async def resend_order_sms(
+        self,
+        order_id: uuid.UUID,
+        tenant_id: uuid.UUID,
+        custom_message: Optional[str] = None
+    ) -> Dict[str, Any]:
+        stmt = select(Order).where(Order.id == order_id, Order.tenant_id == tenant_id)
+        res = await self.db.execute(stmt)
+        order = res.scalars().first()
+        if not order:
+            return {"status": "error", "message": "Order not found"}
+
+        tenant = await self.db.get(Tenant, tenant_id)
+        ecom_settings = tenant.ecommerce_settings if tenant and tenant.ecommerce_settings else {}
+        sms_cfg = ecom_settings.get("sms", {})
+        store_name = tenant.name if tenant else "Our Store"
+
+        if custom_message:
+            rendered_sms = custom_message
+        else:
+            default_template = f"Dear {{{{customer_name}}}}, your order #{{{{order_id}}}} for ৳{{{{total_amount}}}} BDT at {store_name} is confirmed! Thank you for shopping with us."
+            template = ecom_settings.get("sms_order_template") or default_template
+            rendered_sms = SMSService.render_template(template, {
+                "customer_name": order.customer_name,
+                "order_id": order.order_number,
+                "total_amount": f"{order.total_amount:,.2f}",
+                "store_name": store_name
+            })
+
+        sms_res = await SMSService.send_order_sms(
+            phone_number=order.customer_phone,
+            message_text=rendered_sms,
+            sms_config=sms_cfg
+        )
+
+        if sms_res.get("status") in ["sent", "delivered_mock"]:
+            order.sms_sent = True
+            timestamp_str = datetime.now(timezone.utc).strftime("%d %b %Y, %I:%M %p")
+            order.tracking_notes = f"SMS sent on {timestamp_str}: '{rendered_sms[:80]}...'"
+            await self.db.commit()
+
+        return {
+            "status": "success" if sms_res.get("status") in ["sent", "delivered_mock"] else "failed",
+            "sms_response": sms_res,
+            "message_sent": rendered_sms,
+            "recipient": order.customer_phone,
+            "order_number": order.order_number
+        }
+
     async def get_orders(
         self,
         tenant_id: uuid.UUID,
@@ -200,3 +249,4 @@ class OrderService:
         stmt = stmt.order_by(desc(Order.created_at)).limit(limit).offset(offset)
         res = await self.db.execute(stmt)
         return list(res.scalars().all())
+

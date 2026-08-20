@@ -9,12 +9,13 @@ from app.api.v1.auth import get_current_user
 from app.core.security import encrypt_secret, decrypt_secret
 from app.models.all_models import User, Tenant, Product, Order
 from app.schemas.schemas import (
-    ProductCreate, ProductUpdate, ProductOut,
+    ProductCreate, ProductUpdate, ProductOut, ProductGenerateTagsRequest, ProductGenerateTagsResponse,
     OrderCreate, OrderStatusUpdate, OrderOut,
-    EcommerceSettingsOut, EcommerceSettingsUpdate
+    EcommerceSettingsOut, EcommerceSettingsUpdate, TestSMSRequest
 )
 from app.services.ecommerce.product_service import ProductService
 from app.services.ecommerce.order_service import OrderService
+from app.services.sms.sms_service import SMSService
 
 router = APIRouter(tags=["Conversational E-Commerce & Inventory Operations"])
 
@@ -42,6 +43,8 @@ async def list_products(
     category: Optional[str] = None,
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    sort_by: Optional[str] = Query(None, description="title | selling_price | stock_quantity | priority | created_at"),
+    sort_dir: Optional[str] = Query("desc", description="asc or desc"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     user: User = Depends(get_current_user),
@@ -53,6 +56,8 @@ async def list_products(
         category=category,
         search=search,
         is_active=is_active,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
         limit=limit,
         offset=offset
     )
@@ -90,6 +95,47 @@ async def delete_product(
     if not success:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"status": "success", "message": "Product and vector knowledge chunk removed."}
+
+
+@router.patch("/products/{product_id}/priority", response_model=ProductOut)
+async def set_product_priority(
+    product_id: uuid.UUID,
+    priority: int = Query(..., ge=0, description="New priority rank (1=highest, 0=unranked). Auto-shifts others."),
+    tenant: Tenant = Depends(require_active_tenant),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Set product display priority for CDN widget catalog ordering.
+    Priority 1 = shown first. Auto-shifts other products to maintain a clean,
+    non-duplicate ranked sequence (Smart Cascade Reorder Engine).
+    Setting priority=0 removes the product from the ranked list.
+    """
+    service = ProductService(db)
+    product = await service.update_product(
+        product_id=product_id,
+        tenant_id=tenant.id,
+        data=ProductUpdate(priority=priority)
+    )
+    return product
+
+@router.post("/products/generate-tags", response_model=ProductGenerateTagsResponse)
+async def generate_product_tags(
+    data: ProductGenerateTagsRequest,
+    tenant: Tenant = Depends(require_active_tenant),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    On-demand AI Auto-Tagger endpoint for dashboard product creation/editing preview.
+    Analyzes title, category, description, and specs to produce multilingual search keywords.
+    """
+    service = ProductService(db)
+    tags = await service.generate_ai_tags(
+        title=data.title,
+        category=data.category or "General",
+        description=data.description or "",
+        specifications=data.specifications or {}
+    )
+    return ProductGenerateTagsResponse(tags=tags)
 
 # ----------------- ORDER MANAGEMENT ENDPOINTS -----------------
 
@@ -137,6 +183,21 @@ async def update_order_status(
         raise HTTPException(status_code=404, detail="Order not found")
     return order
 
+@router.post("/orders/{order_id}/resend-sms")
+async def resend_order_sms(
+    order_id: uuid.UUID,
+    tenant: Tenant = Depends(require_active_tenant),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Manually triggers re-sending of the order confirmation SMS to customer mobile.
+    """
+    service = OrderService(db)
+    result = await service.resend_order_sms(order_id=order_id, tenant_id=tenant.id)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=404, detail=result.get("message", "Order not found"))
+    return result
+
 # ----------------- ECOMMERCE & GATEWAY SETTINGS -----------------
 
 @router.get("/tenant/ecommerce-settings", response_model=EcommerceSettingsOut)
@@ -158,6 +219,9 @@ async def get_ecommerce_settings(
     sender_id = sms_cfg.get("sender_id", "")
     masked_sender = sender_id if sender_id else None
 
+    sms_key = sms_cfg.get("api_key", "")
+    masked_sms_key = f"{sms_key[:4]}...{sms_key[-4:]}" if len(sms_key) > 8 else ("Configured" if sms_key else None)
+
     return {
         "business_category": tenant.business_category or "ecommerce",
         "cod_enabled": settings.get("cod_enabled", True),
@@ -171,6 +235,7 @@ async def get_ecommerce_settings(
         "sms_notifications_enabled": sms_cfg.get("enabled", True),
         "sms_provider": sms_cfg.get("provider", "smsmatrix"),
         "sms_sender_id_masked": masked_sender,
+        "sms_api_key_masked": masked_sms_key,
         "sms_order_template": settings.get("sms_order_template")
     }
 
@@ -231,6 +296,9 @@ async def update_ecommerce_settings(
     app_key = bkash_cfg.get("app_key", "")
     masked_app_key = f"{app_key[:4]}...{app_key[-4:]}" if len(app_key) > 8 else ("Configured" if app_key else None)
 
+    sms_key = sms_cfg.get("api_key", "")
+    masked_sms_key = f"{sms_key[:4]}...{sms_key[-4:]}" if len(sms_key) > 8 else ("Configured" if sms_key else None)
+
     return {
         "business_category": tenant.business_category or "ecommerce",
         "cod_enabled": settings.get("cod_enabled", True),
@@ -244,5 +312,27 @@ async def update_ecommerce_settings(
         "sms_notifications_enabled": sms_cfg.get("enabled", True),
         "sms_provider": sms_cfg.get("provider", "smsmatrix"),
         "sms_sender_id_masked": sms_cfg.get("sender_id"),
+        "sms_api_key_masked": masked_sms_key,
         "sms_order_template": settings.get("sms_order_template")
     }
+
+@router.post("/tenant/ecommerce-settings/test-sms")
+async def test_sms_gateway(
+    data: TestSMSRequest,
+    tenant: Tenant = Depends(require_active_tenant),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Sends a test SMS to verify the configured SMS Gateway and API Key in real time.
+    """
+    sms_cfg = (tenant.ecommerce_settings or {}).get("sms", {})
+    if not sms_cfg.get("api_key") and not sms_cfg.get("enabled"):
+        raise HTTPException(status_code=400, detail="SMS gateway is not enabled or API key is missing.")
+
+    msg = data.message or f"Hello from {tenant.name}! Your automated SMS Gateway configuration is active and working."
+    res = await SMSService.send_order_sms(
+        phone_number=data.phone_number,
+        message_text=msg,
+        sms_config=sms_cfg
+    )
+    return res

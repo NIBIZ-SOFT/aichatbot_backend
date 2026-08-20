@@ -45,6 +45,8 @@ async def get_public_widget_products(
         category=category,
         search=search,
         is_active=True,
+        sort_by="priority",
+        sort_dir="asc",
         limit=limit
     )
 
@@ -60,7 +62,8 @@ async def get_public_widget_products(
             "stock_quantity": p.stock_quantity,
             "images": p.images,
             "description": p.description,
-            "specifications": p.specifications
+            "specifications": p.specifications,
+            "priority": p.priority
         }
         for p in products
     ]

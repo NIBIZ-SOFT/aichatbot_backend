@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
@@ -21,12 +22,13 @@ from app.schemas.schemas import (
     ProductOut, OrderOut, PublicWidgetOrderCreate, OrderCreate, OrderItemIn,
     SwitchOrderCOD, RetryBkashPayment
 )
-from app.services.ai.gemini import GeminiService, gemini_service
+from app.services.ai.gemini import GeminiService, gemini_service, COMMERCE_TOOLS
 from app.services.ai.safety_rules import AISafetyAndRulesEngine
 from app.services.rag.rag_service import RAGService
 from app.services.realtime.connection_manager import manager
 from app.services.ecommerce.product_service import ProductService
 from app.services.ecommerce.order_service import OrderService
+from app.services.ecommerce.generative_ui import GenerativeUIService
 from app.services.payment.bkash import bkash_service
 from app.services.sms.sms_service import SMSService
 
@@ -152,6 +154,7 @@ async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Dep
             "sender_type": m.sender_type,
             "sender_name": m.sender_name,
             "content": m.content,
+            "ui_component": (m.metadata_json or {}).get("ui_component") if m.metadata_json else None,
             "created_at": str(m.created_at)
         }
         for m in msg_res.scalars().all()
@@ -388,16 +391,50 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
         gemini = GeminiService(api_key=custom_key)
         rag_service = RAGService(db=db, gemini_service=gemini)
         
-        # 1. Dynamic Vector RAG search against PostgreSQL 18
-        rag_chunks = await rag_service.search_relevant_chunks(tenant_id=widget.tenant_id, query=payload.content, limit=3)
-        rag_context_blocks = []
-        if rag_chunks:
-            rag_context_blocks.append("\n\n".join([
-                f"### Knowledge Source: {c.get('source', 'Documentation')} [{c.get('category', 'General')}]\n{c['content']}"
-                for c in rag_chunks
-            ]))
+        # 1. Intent Context Routing & Vector RAG Filtering
+        conv_phone = (conversation.visitor_metadata or {}).get("visitor_phone") if conversation.visitor_metadata else None
+        order_num_match = re.search(r'(ORD-\d{8}-\w+)', payload.content, re.IGNORECASE)
 
-        rag_context = "\n\n---\n\n".join(rag_context_blocks) if rag_context_blocks else None
+        ui_component = None
+        rag_chunks = []
+        rag_context = None
+
+        if order_num_match:
+            # DIRECT POSTGRESQL ORDER LOOKUP (Zero vector tokens wasted!)
+            extracted_ord = order_num_match.group(1).upper()
+            order_query_stmt = select(Order).where(Order.tenant_id == widget.tenant_id, Order.order_number == extracted_ord)
+            order_res = await db.execute(order_query_stmt)
+            matched_order = order_res.scalars().first()
+
+            if matched_order:
+                ui_component = {
+                    "type": "order_tracking_card",
+                    "data": {"order": GenerativeUIService.serialize_order(matched_order)}
+                }
+                items_summary = ", ".join([f"{it.get('quantity', 1)}x {it.get('title')}" for it in (matched_order.items_json or [])])
+                pay_info = f"৳{matched_order.total_amount:,.0f} BDT ({matched_order.payment_method}, {matched_order.payment_status})"
+                rag_context = (
+                    f"### Real-Time Live Order Record (From Store Database):\n"
+                    f"- Order Number: {matched_order.order_number}\n"
+                    f"- Customer: {matched_order.customer_name}\n"
+                    f"- Status: {matched_order.order_status.upper()}\n"
+                    f"- Payment: {pay_info}\n"
+                    f"- Products: {items_summary}\n"
+                    f"- Delivery Destination: {matched_order.delivery_address}, {matched_order.delivery_city}\n"
+                    f"- Notes: {matched_order.tracking_notes or 'Scheduled for courier dispatch.'}\n\n"
+                    f"[Instruction: Confirm order status warmly in 1 short Bengali sentence. The customer can see the live interactive tracking card below.]"
+                )
+        else:
+            # POLICY / FAQ / GENERAL KNOWLEDGE: Dynamic Vector RAG search against PostgreSQL 18
+            rag_chunks = await rag_service.search_relevant_chunks(tenant_id=widget.tenant_id, query=payload.content, limit=3)
+            if rag_chunks:
+                rag_context_blocks = [
+                    f"### Knowledge Source: {c.get('source', 'Documentation')} [{c.get('category', 'General')}]\n{c['content']}"
+                    for c in rag_chunks
+                ]
+                rag_context = "\n\n---\n\n".join(rag_context_blocks)
+            else:
+                rag_context = None
 
         # 2. Fetch recent chat history
         hist_stmt = select(Message).where(Message.conversation_id == conversation.id).order_by(desc(Message.created_at)).limit(6)
@@ -431,12 +468,39 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 rag_context=rag_context,
                 model=assistant.model_name,
                 temperature=assistant.temperature,
-                max_output_tokens=assistant.max_output_tokens
+                max_output_tokens=assistant.max_output_tokens,
+                tools=COMMERCE_TOOLS
             )
             raw_ai_text = ai_res.get("text", "")
+            tool_calls = ai_res.get("tool_calls", [])
+
+            # Resolve Generative UI Component from LLM Function Calling tool calls if present
+            if tool_calls and not ui_component:
+                ui_component = await GenerativeUIService.resolve_ui_component(
+                    db=db,
+                    tenant_id=widget.tenant_id,
+                    user_query=payload.content,
+                    tool_calls=tool_calls,
+                    conversation_id=conversation.id,
+                    visitor_phone=conv_phone
+                )
+
+            # If model returned tool calls with empty text, synthesize a concise conversational response
+            if not raw_ai_text and ui_component:
+                comp_type = ui_component.get("type")
+                if comp_type == "product_card":
+                    p_info = ui_component.get("data", {}).get("product", {})
+                    raw_ai_text = f"আপনার অনুরোধ অনুযায়ী {p_info.get('title')} নিচে দেওয়া হলো। সরাসরি ⚡ Buy Now বা 🛒 Add to Cart বাটনে ক্লিক করে অর্ডার করতে পারেন।"
+                elif comp_type == "product_carousel":
+                    raw_ai_text = "আমাদের স্টোরের প্রোডাক্ট কালেকশন নিচে দেওয়া হলো। আপনার পছন্দের প্রোডাক্টটি বেছে নিয়ে সরাসরি অর্ডার করতে পারেন।"
+                elif comp_type == "order_tracking_card":
+                    o_info = ui_component.get("data", {}).get("order", {})
+                    raw_ai_text = f"আপনার অর্ডার {o_info.get('order_number')}-এর লাইভ ট্র্যাকিং স্ট্যাটাস নিচে দেওয়া হলো।"
+                else:
+                    raw_ai_text = "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?"
 
             # Process AI Guardrail & Multi-Strike Auto-Pause Policy via AISafetyAndRulesEngine
-            ai_reply_text = raw_ai_text
+            ai_reply_text = raw_ai_text or "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?"
             if is_guardrails_enabled:
                 conv_meta = dict(conversation.visitor_metadata or {})
                 current_strikes = conv_meta.get("off_topic_strikes", 0)
@@ -465,7 +529,22 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
 
                 conversation.visitor_metadata = conv_meta
 
-            token_breakdown = ai_res.get("token_breakdown", {})
+            if not ui_component:
+                ui_component = await GenerativeUIService.resolve_ui_component(
+                    db=db,
+                    tenant_id=widget.tenant_id,
+                    user_query=payload.content,
+                    ai_response_text=ai_reply_text,
+                    rag_chunks=rag_chunks,
+                    conversation_id=conversation.id,
+                    visitor_phone=conv_phone
+                )
+
+            token_breakdown = dict(ai_res.get("token_breakdown", {}))
+            if ui_component:
+                rag_chunks = []
+                token_breakdown["rag_context_tokens"] = 0
+
             ai_msg = Message(
                 conversation_id=conversation.id,
                 sender_type=SenderType.AI,
@@ -473,10 +552,11 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 prompt_tokens=ai_res.get("prompt_tokens", 0),
                 completion_tokens=ai_res.get("completion_tokens", 0),
                 latency_ms=ai_res.get("latency_ms", 0),
-                sources_cited=rag_chunks or [],
+                sources_cited=rag_chunks,
                 metadata_json={
                     "customer_query": payload.content,
                     "token_breakdown": token_breakdown,
+                    "ui_component": ui_component,
                     "cost_usd": ai_res.get("cost_usd", 0.0),
                     "cost_bdt": ai_res.get("cost_bdt", 0.0),
                     "model_used": assistant.model_name
@@ -521,7 +601,9 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
         await manager.broadcast_to_conversation(str(conversation.id), {
             "event": "message",
             "sender_type": "ai",
+            "sender_name": assistant.name if assistant else "AI Assistant",
             "content": ai_reply_text,
+            "ui_component": ui_component,
             "created_at": str(datetime.now(timezone.utc))
         })
 
@@ -529,6 +611,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
         "status": "delivered",
         "conversation_id": conversation.id,
         "ai_response": ai_reply_text,
+        "ui_component": ui_component if 'ui_component' in locals() else None,
         "is_handover_requested": wants_handover
     }
 
