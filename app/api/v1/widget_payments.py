@@ -241,15 +241,33 @@ async def public_widget_bkash_callback(
                 if conv:
                     item_summary = ", ".join([f"{it['title']} (x{it['quantity']})" for it in (order.items_json or [])])
                     receipt_text = (
-                        f"🎉 **bKash Payment Verified & Confirmed!**\n\n"
-                        f"• **Order Number:** `{order.order_number}`\n"
-                        f"• **bKash TrxID:** `{trx_id}`\n"
-                        f"• **Items:** {item_summary}\n"
-                        f"• **Delivery Address:** {order.delivery_address}, {order.delivery_city}\n"
-                        f"• **Total Paid:** ৳{order.total_amount:,.2f} BDT\n"
-                        f"• **Status:** PAID via bKash Online Payment\n\n"
-                        f"An automated confirmation SMS has been dispatched. Our team will pack and ship your parcel shortly!"
+                        f"### 🧾 bKash Payment Verified & Confirmed\n\n"
+                        f"**Status:** 🟢 **PAID & VERIFIED** (bKash Online Gateway)\n\n"
+                        f"| Invoice Detail | Value |\n"
+                        f"| :--- | :--- |\n"
+                        f"| **Order Number** | `{order.order_number}` |\n"
+                        f"| **bKash TrxID** | `{trx_id}` |\n"
+                        f"| **Purchased Items** | {item_summary} |\n"
+                        f"| **Delivery Address** | {order.delivery_address}, {order.delivery_city} |\n"
+                        f"| **Total Paid** | **৳{order.total_amount:,.2f} BDT** |\n\n"
+                        f"> 📱 **SMS Confirmation:** Dispatched to `{order.customer_phone}`.\n"
+                        f"> 🚚 **Next Step:** Our fulfillment team will securely pack and dispatch your parcel shortly!"
                     )
+                    
+                    ui_comp = {
+                        "type": "bkash_confirmed_card",
+                        "data": {
+                            "order_number": order.order_number,
+                            "bkash_trx_id": trx_id,
+                            "items_summary": item_summary,
+                            "total_amount": order.total_amount,
+                            "delivery_address": f"{order.delivery_address}, {order.delivery_city}",
+                            "customer_name": order.customer_name,
+                            "customer_phone": order.customer_phone,
+                            "status": "paid"
+                        }
+                    }
+
                     db_msg = Message(
                         conversation_id=conv.id,
                         sender_type=SenderType.SYSTEM,
@@ -261,7 +279,8 @@ async def public_widget_bkash_callback(
                             "order_id": str(order.id),
                             "order_number": order.order_number,
                             "bkash_trx_id": trx_id,
-                            "is_payment_verified": True
+                            "is_payment_verified": True,
+                            "ui_component": ui_comp
                         }
                     )
                     db.add(db_msg)
@@ -275,6 +294,7 @@ async def public_widget_bkash_callback(
                         "bkash_trx_id": trx_id,
                         "amount": order.total_amount,
                         "content": receipt_text,
+                        "ui_component": ui_comp,
                         "created_at": str(datetime.now(timezone.utc))
                     }
                     await manager.broadcast_to_conversation(str(conv.id), live_payload)

@@ -2458,12 +2458,16 @@
         }
 
         appendMessage(
-          `🎉 **bKash Payment Verified & Confirmed!**\n\n` +
-          `• **Order Number:** \`${ordNum}\`\n` +
-          `• **bKash TrxID:** \`${trx}\`\n` +
-          `• **Amount Paid:** ৳${amt} BDT\n` +
-          `• **Payment Status:** ✅ PAID via bKash\n\n` +
-          `An automated confirmation SMS has been dispatched. Our team will pack and ship your parcel shortly!`,
+          `### 🧾 bKash Payment Verified & Confirmed\n\n` +
+          `**Status:** 🟢 **PAID & VERIFIED** (bKash Online Gateway)\n\n` +
+          `| Invoice Detail | Value |\n` +
+          `| :--- | :--- |\n` +
+          `| **Order Number** | \`${ordNum}\` |\n` +
+          `| **bKash TrxID** | \`${trx}\` |\n` +
+          `| **Total Amount Paid** | **৳${Number(amt).toLocaleString()} BDT** |\n` +
+          `| **Payment Status** | ✅ Confirmed & Settled |\n\n` +
+          `> 📱 **SMS Confirmation:** Dispatched to customer mobile.\n` +
+          `> 🚚 **Next Step:** Our dispatch team is currently packing your parcel!`,
           "system",
           "bKash Verified"
         );
