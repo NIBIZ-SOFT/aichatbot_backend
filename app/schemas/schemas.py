@@ -285,6 +285,7 @@ class MessageOut(BaseModel):
     completion_tokens: int
     latency_ms: Optional[int]
     sources_cited: List[Dict[str, Any]]
+    metadata_json: Optional[Dict[str, Any]] = None
     created_at: datetime
     class Config:
         from_attributes = True
