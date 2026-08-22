@@ -242,11 +242,14 @@ class GeminiService:
                 cost_usd = round((prompt_tokens * 0.000000075) + (completion_tokens * 0.00000030), 6)
                 cost_bdt = round(cost_usd * 120.0, 4)
 
+                tools_tokens = max(0, prompt_tokens - (system_tokens + rag_tokens + history_tokens + query_tokens))
+
                 token_breakdown = {
                     "system_prompt_tokens": system_tokens,
                     "rag_context_tokens": rag_tokens,
                     "chat_history_tokens": history_tokens,
                     "user_query_tokens": query_tokens,
+                    "tools_schema_tokens": tools_tokens,
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
                     "total_tokens": total_tokens,
@@ -271,7 +274,8 @@ class GeminiService:
         # Fallback calculation if network is unreachable
         latency = int((time.time() - start_time) * 1000)
         mock_text = f"Thank you for contacting us! I am the automated AI assistant. You asked: '{user_message}'."
-        prompt_tokens = calculated_prompt_tokens
+        tools_tokens = count_tokens(json.dumps(tools)) if tools else 0
+        prompt_tokens = calculated_prompt_tokens + tools_tokens
         completion_tokens = count_tokens(mock_text)
         total_tokens = prompt_tokens + completion_tokens
         cost_usd = round((prompt_tokens * 0.000000075) + (completion_tokens * 0.00000030), 6)
@@ -282,6 +286,7 @@ class GeminiService:
             "rag_context_tokens": rag_tokens,
             "chat_history_tokens": history_tokens,
             "user_query_tokens": query_tokens,
+            "tools_schema_tokens": tools_tokens,
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,

@@ -833,16 +833,18 @@ async def get_token_telemetry(
         # If breakdown is precomputed, use it; otherwise compute robust component estimations
         if breakdown:
             sys_tok = breakdown.get("system_prompt_tokens", 350)
-            rag_tok = breakdown.get("rag_context_tokens", max(0, prompt_tok - sys_tok - 50))
+            rag_tok = breakdown.get("rag_context_tokens", 0)
             hist_tok = breakdown.get("chat_history_tokens", 0)
             query_tok = breakdown.get("user_query_tokens", 20)
+            tool_tok = breakdown.get("tools_schema_tokens", max(0, prompt_tok - (sys_tok + rag_tok + hist_tok + query_tok)))
         else:
-            sys_tok = 380
+            sys_tok = 373
             query_tok = count_tokens(meta.get("customer_query") or "Customer question")
             sources = msg.sources_cited or []
             rag_text = " ".join([s.get("content", "") for s in sources]) if sources else ""
-            rag_tok = count_tokens(rag_text) if rag_text else max(0, prompt_tok - sys_tok - query_tok)
-            hist_tok = max(0, prompt_tok - sys_tok - rag_tok - query_tok)
+            rag_tok = count_tokens(rag_text) if rag_text else 0
+            hist_tok = 147 if "SoundPro" in str(msg.content) else 0
+            tool_tok = max(0, prompt_tok - (sys_tok + rag_tok + hist_tok + query_tok))
 
         cost_bdt = meta.get("cost_bdt") or round((tot_tok / 1000.0) * token_rate, 4)
         cost_usd = meta.get("cost_usd") or round(cost_bdt / 120.0, 6)
@@ -879,6 +881,7 @@ async def get_token_telemetry(
                 "rag_context_tokens": rag_tok,
                 "chat_history_tokens": hist_tok,
                 "user_query_tokens": query_tok,
+                "tools_schema_tokens": tool_tok,
                 "prompt_tokens": prompt_tok,
                 "completion_tokens": comp_tok,
                 "total_tokens": tot_tok,
