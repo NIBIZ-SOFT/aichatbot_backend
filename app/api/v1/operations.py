@@ -306,12 +306,89 @@ async def create_webhook(payload: WebhookCreate, user: User = Depends(get_curren
 # ----------------- NOTIFICATIONS & AUDIT LOGS -----------------
 @router.get("/notifications", response_model=List[NotificationOut])
 async def list_notifications(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(Notification).where(Notification.tenant_id == user.tenant_id).order_by(desc(Notification.created_at)))
+    if user.role == UserRole.SUPER_ADMIN and not user.tenant_id:
+        res = await db.execute(select(Notification).order_by(desc(Notification.created_at)).limit(50))
+    elif user.tenant_id:
+        res = await db.execute(select(Notification).where(Notification.tenant_id == user.tenant_id).order_by(desc(Notification.created_at)).limit(50))
+    else:
+        return []
     return res.scalars().all()
+
+@router.put("/notifications/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(Notification).where(Notification.id == notification_id)
+    if user.tenant_id:
+        stmt = stmt.where(Notification.tenant_id == user.tenant_id)
+    notif = (await db.execute(stmt)).scalars().first()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    notif.is_read = True
+    await db.commit()
+    return {"status": "success", "id": str(notification_id), "is_read": True}
+
+@router.put("/notifications/read-all")
+async def mark_all_notifications_read(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if user.tenant_id:
+        await db.execute(
+            update(Notification)
+            .where(Notification.tenant_id == user.tenant_id)
+            .values(is_read=True)
+        )
+    elif user.role == UserRole.SUPER_ADMIN:
+        await db.execute(
+            update(Notification)
+            .values(is_read=True)
+        )
+    await db.commit()
+    return {"status": "success", "message": "All notifications marked as read"}
+
+@router.delete("/notifications/{notification_id}")
+async def delete_notification(
+    notification_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(Notification).where(Notification.id == notification_id)
+    if user.tenant_id:
+        stmt = stmt.where(Notification.tenant_id == user.tenant_id)
+    notif = (await db.execute(stmt)).scalars().first()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    await db.delete(notif)
+    await db.commit()
+    return {"status": "success", "message": "Notification deleted"}
+
+@router.delete("/notifications/clear-all")
+async def clear_all_notifications(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if user.tenant_id:
+        await db.execute(
+            delete(Notification)
+            .where(Notification.tenant_id == user.tenant_id, Notification.is_read == True)
+        )
+    elif user.role == UserRole.SUPER_ADMIN:
+        await db.execute(
+            delete(Notification)
+            .where(Notification.is_read == True)
+        )
+    await db.commit()
+    return {"status": "success", "message": "Read notifications cleared"}
 
 @router.get("/audit-logs", response_model=List[AuditLogOut])
 async def list_audit_logs(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(AuditLog).where(AuditLog.tenant_id == user.tenant_id).order_by(desc(AuditLog.created_at)))
+    if user.tenant_id:
+        res = await db.execute(select(AuditLog).where(AuditLog.tenant_id == user.tenant_id).order_by(desc(AuditLog.created_at)).limit(100))
+    else:
+        res = await db.execute(select(AuditLog).order_by(desc(AuditLog.created_at)).limit(100))
     return res.scalars().all()
 
 # ----------------- SUBSCRIPTION & USAGE -----------------

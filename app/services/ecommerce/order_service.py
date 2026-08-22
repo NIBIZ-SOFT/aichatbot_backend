@@ -137,6 +137,20 @@ class OrderService:
         except Exception as e:
             print(f"[OrderService] SMS dispatch notice: {str(e)}", flush=True)
 
+        # 4. In-App Real-Time Notification Dispatch
+        try:
+            from app.services.notification_service import notify_new_order
+            await notify_new_order(
+                db=self.db,
+                tenant_id=tenant_id,
+                order_number=order.order_number,
+                customer_name=order.customer_name,
+                total_amount_bdt=order.total_amount,
+                payment_method=order.payment_method
+            )
+        except Exception as ne:
+            print(f"[OrderService] Notification dispatch notice: {str(ne)}", flush=True)
+
         return order
 
     async def update_order_status(

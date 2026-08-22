@@ -855,6 +855,45 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
         )
         db.add_all([log1, log2])
 
+        # Seed In-App Real-Time Notifications
+        notif1 = Notification(
+            tenant_id=tenant.id,
+            title="🛒 New Order #ORD-8921 Placed",
+            message="New order for ৳3,450.00 (Padma Ultra Watch + Panjabi) placed by Sadia Rahman via bKash Online.",
+            type="order",
+            is_read=False,
+            link="/orders",
+            created_at=utc_now() - timedelta(minutes=12)
+        )
+        notif2 = Notification(
+            tenant_id=tenant.id,
+            title="🚨 Human Agent Handover Requested",
+            message="Customer Farhan (+8801712345678) requested human assistance in Live Chat queue.",
+            type="handover",
+            is_read=False,
+            link="/inbox",
+            created_at=utc_now() - timedelta(minutes=45)
+        )
+        notif3 = Notification(
+            tenant_id=tenant.id,
+            title="🧠 RAG Knowledge Base Indexed",
+            message="'Padma Mart Delivery & Payment Policy 2026.pdf' successfully vectorized into 142 embeddings.",
+            type="knowledge",
+            is_read=False,
+            link="/knowledge",
+            created_at=utc_now() - timedelta(hours=2)
+        )
+        notif4 = Notification(
+            tenant_id=tenant.id,
+            title="⚡ Token Quota Update",
+            message="You have consumed 1.86M of 10.0M monthly AI tokens (81.4% capacity remaining).",
+            type="billing",
+            is_read=True,
+            link="/subscription",
+            created_at=utc_now() - timedelta(hours=5)
+        )
+        db.add_all([notif1, notif2, notif3, notif4])
+
         await db.commit()
         print("[SUCCESS] E-Commerce Database Seeding Successfully Completed (Bangladeshi Format + BDT Taka)!")
 
