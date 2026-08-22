@@ -53,8 +53,12 @@ async def seed_database():
                 await db.delete(existing_tenant)
                 await db.commit()
 
-        # Also clean super admin user if already exists for idempotent run
-        await db.execute(delete(User).where(User.email.in_(["superadmin@enterprise.example", "superadmin@padmaai.example"])))
+        # Also clean super admin user and demo client users if already exists for idempotent run
+        await db.execute(delete(User).where(User.email.in_([
+            "admin@gmail.com", "client@gmail.com",
+            "superadmin@enterprise.example", "superadmin@padmaai.example", 
+            "owner@padmadigital.example", "owner@padmaai.example"
+        ])))
         await db.commit()
 
         # 2. Seed Primary Organization (Demo Tenant: Padma Mart Ltd. - Top BD E-Commerce Brand)
@@ -143,8 +147,8 @@ async def seed_database():
         # 4a. Platform Super Admin (Global - No Tenant Context)
         super_admin_user = User(
             tenant_id=None,
-            email="superadmin@enterprise.example",
-            hashed_password=get_password_hash("DemoPass123!"),
+            email="admin@gmail.com",
+            hashed_password=get_password_hash("12345678"),
             full_name="Platform Super Admin",
             role=UserRole.SUPER_ADMIN,
             department="Platform Operations",
@@ -152,11 +156,11 @@ async def seed_database():
             is_online=False
         )
         db.add(super_admin_user)
-        seeded_users["superadmin@enterprise.example"] = super_admin_user
+        seeded_users["admin@gmail.com"] = super_admin_user
 
-        # 4b. Padma Mart Organization Owner & Specialized E-Commerce Staff
+        # 4b. Padma Mart Organization Owner (Demo Client) & Specialized E-Commerce Staff
         padma_users_data = [
-            ("owner@padmadigital.example", "Avijit Barua", UserRole.TENANT_OWNER, "Executive"),
+            ("client@gmail.com", "Demo Client", UserRole.TENANT_OWNER, "Executive"),
             ("nusrat.support@padmadigital.example", "Nusrat Jahan", UserRole.SUPPORT_AGENT, "Customer Support & Orders"),
             ("ariful.sales@padmadigital.example", "Ariful Islam", UserRole.SALES_AGENT, "Sales & Styling Advisor"),
             ("mahmud.tech@padmadigital.example", "Mahmudul Hasan", UserRole.SUPPORT_AGENT, "Payment & Gateway Support"),
@@ -167,7 +171,7 @@ async def seed_database():
             u = User(
                 tenant_id=tenant.id,
                 email=email,
-                hashed_password=get_password_hash("DemoPass123!"),
+                hashed_password=get_password_hash("12345678"),
                 full_name=name,
                 role=role,
                 department=dept,
@@ -718,7 +722,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
         u_daraz = User(
             tenant_id=t_daraz.id,
             email="owner@darazseller.example",
-            hashed_password=get_password_hash("DemoPass123!"),
+            hashed_password=get_password_hash("12345678"),
             full_name="Tareq Mahmud",
             role=UserRole.TENANT_OWNER,
             department="Executive",
@@ -754,7 +758,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
         u_aarong = User(
             tenant_id=t_aarong.id,
             email="owner@aaronglifestyle.example",
-            hashed_password=get_password_hash("DemoPass123!"),
+            hashed_password=get_password_hash("12345678"),
             full_name="Farhana Islam",
             role=UserRole.TENANT_OWNER,
             department="Executive",
@@ -790,7 +794,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
         u_pickaboo = User(
             tenant_id=t_pickaboo.id,
             email="owner@pickaboohub.example",
-            hashed_password=get_password_hash("DemoPass123!"),
+            hashed_password=get_password_hash("12345678"),
             full_name="Sajjad Hossain",
             role=UserRole.TENANT_OWNER,
             department="Executive",
@@ -826,7 +830,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
         u_rokomari = User(
             tenant_id=t_rokomari.id,
             email="owner@rokomaribooks.example",
-            hashed_password=get_password_hash("DemoPass123!"),
+            hashed_password=get_password_hash("12345678"),
             full_name="Tanvir Ahmed",
             role=UserRole.TENANT_OWNER,
             department="Executive",

@@ -114,20 +114,20 @@ async def run_database_seed():
             "message": "Database successfully created and seeded with Bangladeshi E-Commerce demo data!",
             "credentials": {
                 "super_admin": {
-                    "email": "superadmin@enterprise.example",
-                    "password": "DemoPass123!"
+                    "email": "admin@gmail.com",
+                    "password": "12345678"
                 },
-                "tenant_owner": {
-                    "email": "owner@padmadigital.example",
-                    "password": "DemoPass123!"
+                "demo_client": {
+                    "email": "client@gmail.com",
+                    "password": "12345678"
                 },
                 "support_agent": {
                     "email": "nusrat.support@padmadigital.example",
-                    "password": "DemoPass123!"
+                    "password": "12345678"
                 },
                 "sales_agent": {
                     "email": "ariful.sales@padmadigital.example",
-                    "password": "DemoPass123!"
+                    "password": "12345678"
                 }
             }
         }
