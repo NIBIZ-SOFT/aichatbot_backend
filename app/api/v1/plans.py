@@ -90,3 +90,35 @@ async def validate_coupon_code(
         amount_bdt=payload.amount_bdt
     )
     return ValidateCouponResponse(**result)
+
+@router.get("/config", response_model=dict)
+async def get_public_pricing_config(db: AsyncSession = Depends(get_db)):
+    """
+    Returns public pricing configuration including PAYG status and default token rate.
+    """
+    config = await PricingService.get_pricing_engine_config(db)
+    return config
+
+@router.post("/custom-quote", response_model=dict)
+async def get_custom_plan_quote(payload: dict, db: AsyncSession = Depends(get_db)):
+    """
+    Computes real-time dynamic pricing quote for interactive sliders & custom packages.
+    """
+    from app.services.billing.wallet_service import WalletService
+    tokens = int(payload.get("tokens", 1_000_000))
+    seats = int(payload.get("seats", 2))
+    websites = int(payload.get("websites", 1))
+    knowledge_docs = int(payload.get("knowledge_docs", 50))
+    is_annual = bool(payload.get("is_annual", False))
+    modules = payload.get("modules", {})
+    
+    quote = WalletService.calculate_custom_quote(
+        tokens=tokens,
+        seats=seats,
+        websites=websites,
+        knowledge_docs=knowledge_docs,
+        is_annual=is_annual,
+        modules=modules
+    )
+    return quote
+

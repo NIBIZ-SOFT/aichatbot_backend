@@ -26,6 +26,8 @@ class SubscriptionTier(str, enum.Enum):
     STARTER = "starter"
     GROWTH = "growth"
     ENTERPRISE = "enterprise"
+    PAYG = "pay_as_you_go"
+    CUSTOM = "custom"
 
 class SubscriptionStatus(str, enum.Enum):
     ACTIVE = "active"
@@ -91,6 +93,8 @@ class Tenant(Base):
     audit_logs: Mapped[List["AuditLog"]] = relationship("AuditLog", back_populates="tenant", cascade="all, delete-orphan")
     products: Mapped[List["Product"]] = relationship("Product", back_populates="tenant", cascade="all, delete-orphan")
     orders: Mapped[List["Order"]] = relationship("Order", back_populates="tenant", cascade="all, delete-orphan")
+    wallet: Mapped[Optional["TenantWallet"]] = relationship("TenantWallet", back_populates="tenant", uselist=False, cascade="all, delete-orphan")
+    wallet_transactions: Mapped[List["WalletTransaction"]] = relationship("WalletTransaction", back_populates="tenant", cascade="all, delete-orphan")
 
 class User(Base):
     __tablename__ = "users"
@@ -127,6 +131,12 @@ class Subscription(Base):
     max_agents: Mapped[int] = mapped_column(Integer, default=2)
     max_websites: Mapped[int] = mapped_column(Integer, default=1)
     max_knowledge_docs: Mapped[int] = mapped_column(Integer, default=10)
+    
+    # Contract Price & Resource Locking (Grandfathering Protection)
+    locked_price_bdt: Mapped[float] = mapped_column(Float, default=0.0)
+    locked_token_limit: Mapped[int] = mapped_column(Integer, default=500_000)
+    is_custom_deal: Mapped[bool] = mapped_column(Boolean, default=False)
+    deal_notes: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     
     current_period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     current_period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
@@ -416,6 +426,8 @@ class PricingPlan(Base):
     is_popular: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_custom_offer: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_pay_as_you_go: Mapped[bool] = mapped_column(Boolean, default=False)
+    per_1k_tokens_rate_bdt: Mapped[float] = mapped_column(Float, default=0.15) # Default: ৳0.15 per 1,000 tokens
     display_order: Mapped[int] = mapped_column(Integer, default=0)
     valid_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -535,3 +547,59 @@ class Order(Base):
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="orders")
     website: Mapped[Optional["Website"]] = relationship("Website", back_populates="orders")
     conversation: Mapped[Optional["Conversation"]] = relationship("Conversation", back_populates="orders")
+
+
+# ----------------- LAYER 6: PREPAID AI WALLET & PAY-AS-YOU-GO LEDGER -----------------
+
+class WalletTransactionType(str, enum.Enum):
+    TOPUP = "topup"
+    USAGE_AI_TOKENS = "usage_ai_tokens"
+    BONUS = "bonus"
+    REFUND = "refund"
+
+
+class TenantWallet(Base):
+    __tablename__ = "tenant_wallets"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), unique=True, index=True, nullable=False)
+    
+    balance_bdt: Mapped[float] = mapped_column(Float, default=0.0)
+    total_credited_bdt: Mapped[float] = mapped_column(Float, default=0.0)
+    total_consumed_bdt: Mapped[float] = mapped_column(Float, default=0.0)
+    
+    per_1k_tokens_rate_bdt: Mapped[float] = mapped_column(Float, default=0.15) # Default: ৳0.15 per 1,000 tokens
+    low_balance_threshold_bdt: Mapped[float] = mapped_column(Float, default=50.0)
+    is_custom_rate: Mapped[bool] = mapped_column(Boolean, default=False)
+    contract_locked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="wallet")
+    transactions: Mapped[List["WalletTransaction"]] = relationship("WalletTransaction", back_populates="wallet", cascade="all, delete-orphan")
+
+
+class WalletTransaction(Base):
+    __tablename__ = "wallet_transactions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    wallet_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenant_wallets.id", ondelete="CASCADE"), index=True, nullable=False)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("tenants.id", ondelete="CASCADE"), index=True, nullable=False)
+    
+    transaction_type: Mapped[WalletTransactionType] = mapped_column(Enum(WalletTransactionType), default=WalletTransactionType.TOPUP)
+    amount_bdt: Mapped[float] = mapped_column(Float, nullable=False) # Positive for credit, negative for usage deduction
+    balance_after_bdt: Mapped[float] = mapped_column(Float, default=0.0)
+    tokens_consumed: Mapped[int] = mapped_column(Integer, default=0)
+    
+    payment_id: Mapped[Optional[uuid.UUID]] = mapped_column(Uuid, nullable=True)
+    bkash_trx_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    description: Mapped[str] = mapped_column(String(255), nullable=False)
+    metadata_json: Mapped[Dict[str, Any]] = mapped_column(JSON, default=dict)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    wallet: Mapped["TenantWallet"] = relationship("TenantWallet", back_populates="transactions")
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="wallet_transactions")
+

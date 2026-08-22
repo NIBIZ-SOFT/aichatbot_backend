@@ -1299,5 +1299,151 @@ async def update_superadmin_theme(
     }
 
 
+# ----------------- PRICING ENGINE & GRANDFATHERED CONTRACT OVERRIDES -----------------
+
+class PricingEnginePayload(BaseModel):
+    default_per_10k_tokens_rate_bdt: float = 1.50
+    pay_as_you_go_enabled: bool = True
+    custom_slider_builder_enabled: bool = True
+    min_wallet_topup_bdt: float = 100.0
+    base_custom_platform_fee_bdt: float = 1990.0
+    per_extra_agent_bdt: float = 750.0
+    per_extra_website_bdt: float = 1200.0
+
+@router.get("/pricing-engine")
+async def get_superadmin_pricing_engine(
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Returns global dynamic token pricing and PAYG master switch configuration.
+    """
+    config = await PricingService.get_pricing_engine_config(db)
+    return config
+
+@router.put("/pricing-engine")
+async def update_superadmin_pricing_engine(
+    payload: PricingEnginePayload,
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Updates global AI token unit rate, minimum top-up, and Pay-As-You-Go visibility toggle.
+    """
+    data = payload.model_dump()
+    updated = await PricingService.update_pricing_engine_config(db, data)
+    
+    audit = AuditLog(
+        tenant_id=None,
+        user_id=admin.id,
+        action="superadmin.pricing_engine_updated",
+        resource_type="pricing_engine",
+        resource_id="global",
+        metadata_json={
+            "admin_email": admin.email,
+            "default_per_10k_rate": payload.default_per_10k_tokens_rate_bdt,
+            "pay_as_you_go_enabled": payload.pay_as_you_go_enabled
+        }
+    )
+    db.add(audit)
+    await db.commit()
+    
+    return {
+        "status": "success",
+        "message": "Global AI Token & Pricing Engine updated successfully.",
+        "config": updated
+    }
+
+
+class TenantPricingContractPayload(BaseModel):
+    locked_price_bdt: float
+    per_1k_tokens_rate_bdt: float
+    is_custom_deal: bool = True
+    deal_notes: Optional[str] = None
+
+@router.get("/tenants/{tenant_id}/pricing-contract")
+async def get_tenant_pricing_contract(
+    tenant_id: uuid.UUID,
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Retrieves individual client contract price locking, token rate, and VIP deal details.
+    """
+    from app.services.billing.wallet_service import WalletService
+    from app.models.all_models import TenantWallet
+    
+    sub_stmt = select(Subscription).where(Subscription.tenant_id == tenant_id)
+    sub = (await db.execute(sub_stmt)).scalars().first()
+    
+    wallet = await WalletService.get_or_create_wallet(db, tenant_id)
+    
+    return {
+        "tenant_id": str(tenant_id),
+        "tier": sub.tier.value if sub else "growth",
+        "locked_price_bdt": sub.locked_price_bdt if sub else 0.0,
+        "is_custom_deal": sub.is_custom_deal if sub else False,
+        "deal_notes": sub.deal_notes if sub else None,
+        "per_1k_tokens_rate_bdt": wallet.per_1k_tokens_rate_bdt,
+        "is_custom_wallet_rate": wallet.is_custom_rate,
+        "balance_bdt": wallet.balance_bdt,
+        "contract_locked_at": wallet.contract_locked_at.isoformat() if wallet.contract_locked_at else None
+    }
+
+@router.put("/tenants/{tenant_id}/pricing-contract")
+async def update_tenant_pricing_contract(
+    tenant_id: uuid.UUID,
+    payload: TenantPricingContractPayload,
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Overrides specific client subscription fee and token rate for custom VIP enterprise agreements.
+    """
+    from app.services.billing.wallet_service import WalletService
+    from app.models.all_models import TenantWallet
+    
+    sub_stmt = select(Subscription).where(Subscription.tenant_id == tenant_id)
+    sub = (await db.execute(sub_stmt)).scalars().first()
+    if sub:
+        sub.locked_price_bdt = payload.locked_price_bdt
+        sub.is_custom_deal = payload.is_custom_deal
+        sub.deal_notes = payload.deal_notes
+        sub.updated_at = datetime.now(timezone.utc)
+        
+    wallet = await WalletService.get_or_create_wallet(db, tenant_id)
+    wallet.per_1k_tokens_rate_bdt = payload.per_1k_tokens_rate_bdt
+    wallet.is_custom_rate = payload.is_custom_deal
+    wallet.updated_at = datetime.now(timezone.utc)
+    
+    audit = AuditLog(
+        tenant_id=tenant_id,
+        user_id=admin.id,
+        action="superadmin.tenant_custom_deal_updated",
+        resource_type="tenant_contract",
+        resource_id=str(tenant_id),
+        metadata_json={
+            "admin_email": admin.email,
+            "locked_price_bdt": payload.locked_price_bdt,
+            "per_1k_tokens_rate_bdt": payload.per_1k_tokens_rate_bdt,
+            "deal_notes": payload.deal_notes
+        }
+    )
+    db.add(audit)
+    await db.commit()
+    
+    return {
+        "status": "success",
+        "message": f"Custom pricing contract updated for tenant {tenant_id}.",
+        "contract": {
+            "locked_price_bdt": payload.locked_price_bdt,
+            "per_1k_tokens_rate_bdt": payload.per_1k_tokens_rate_bdt,
+            "is_custom_deal": payload.is_custom_deal,
+            "deal_notes": payload.deal_notes
+        }
+    }
+
+
+
 
 

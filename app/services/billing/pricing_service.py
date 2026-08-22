@@ -259,3 +259,56 @@ class PricingService:
         db.add(redemption)
         await db.commit()
         return redemption
+
+    @staticmethod
+    async def get_pricing_engine_config(db: AsyncSession) -> Dict[str, Any]:
+        """
+        Retrieves global dynamic token pricing and PAYG master switch configuration.
+        """
+        from app.models.all_models import PlatformSetting
+        stmt = select(PlatformSetting).where(PlatformSetting.key == "pricing_engine_config")
+        setting = (await db.execute(stmt)).scalars().first()
+        
+        default_config = {
+            "default_per_10k_tokens_rate_bdt": 1.50,
+            "pay_as_you_go_enabled": True,
+            "custom_slider_builder_enabled": True,
+            "min_wallet_topup_bdt": 100.0,
+            "base_custom_platform_fee_bdt": 1990.0,
+            "per_extra_agent_bdt": 750.0,
+            "per_extra_website_bdt": 1200.0
+        }
+        
+        if not setting:
+            return default_config
+            
+        merged = {**default_config, **(setting.value_json or {})}
+        return merged
+
+    @staticmethod
+    async def update_pricing_engine_config(db: AsyncSession, config_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Updates global dynamic token pricing and PAYG switches in PlatformSetting.
+        """
+        from app.models.all_models import PlatformSetting
+        from sqlalchemy.orm.attributes import flag_modified
+        stmt = select(PlatformSetting).where(PlatformSetting.key == "pricing_engine_config")
+        setting = (await db.execute(stmt)).scalars().first()
+        
+        if not setting:
+            setting = PlatformSetting(
+                key="pricing_engine_config",
+                value_json=dict(config_data)
+            )
+            db.add(setting)
+        else:
+            current = dict(setting.value_json or {})
+            current.update(config_data)
+            setting.value_json = dict(current)
+            flag_modified(setting, "value_json")
+            setting.updated_at = datetime.now(timezone.utc)
+            
+        await db.commit()
+        await db.refresh(setting)
+        return setting.value_json
+

@@ -608,9 +608,12 @@ async def get_usage_summary(
     total_msgs = max(live_msgs + rec_msgs, 1_842)
     total_convs = max(rec_convs, 312)
 
-    # 4. Standard Gemini Pricing Model in BDT (1 USD ≈ 120 BDT)
-    # Gemini Flash: $0.075 / 1M prompt tokens, $0.30 / 1M completion tokens -> in BDT (৳)
-    cost_usd = round(((prompt_tokens * 0.000000075) + (completion_tokens * 0.00000030)) * 120, 2)
+    # 4. Precision Contracted Pricing Model in BDT
+    from app.services.billing.wallet_service import WalletService
+    wallet = await WalletService.get_or_create_wallet(db, t_id)
+    token_rate = wallet.per_1k_tokens_rate_bdt
+    cost_bdt = round((total_tokens / 1000.0) * token_rate, 2)
+    cost_usd = round(cost_bdt / 120.0, 2)
     usage_pct = round((total_tokens / token_limit) * 100, 2)
 
     # 5. Connected Websites Breakdown
@@ -736,6 +739,10 @@ async def get_token_telemetry(
     total_output_tokens = 0
     total_overall_tokens = 0
 
+    from app.services.billing.wallet_service import WalletService
+    wallet = await WalletService.get_or_create_wallet(db, t_id)
+    token_rate = wallet.per_1k_tokens_rate_bdt
+
     from app.core.token_counter import count_tokens
 
     for msg, conv in rows:
@@ -760,8 +767,8 @@ async def get_token_telemetry(
             rag_tok = count_tokens(rag_text) if rag_text else max(0, prompt_tok - sys_tok - query_tok)
             hist_tok = max(0, prompt_tok - sys_tok - rag_tok - query_tok)
 
-        cost_usd = meta.get("cost_usd", round((prompt_tok * 0.000000075) + (comp_tok * 0.00000030), 6))
-        cost_bdt = meta.get("cost_bdt", round(cost_usd * 120.0, 4))
+        cost_bdt = meta.get("cost_bdt") or round((tot_tok / 1000.0) * token_rate, 4)
+        cost_usd = meta.get("cost_usd") or round(cost_bdt / 120.0, 6)
 
         total_sys_tokens += sys_tok
         total_rag_tokens += rag_tok
@@ -799,7 +806,8 @@ async def get_token_telemetry(
                 "completion_tokens": comp_tok,
                 "total_tokens": tot_tok,
                 "cost_usd": cost_usd,
-                "cost_bdt": cost_bdt
+                "cost_bdt": cost_bdt,
+                "recommendation_tip": tip
             },
             "rag_percentage": rag_pct,
             "optimization_tip": tip,
@@ -825,8 +833,10 @@ async def get_token_telemetry(
             "avg_prompt_tokens": round((total_sys_tokens + total_rag_tokens + total_hist_tokens + total_query_tokens) / n),
             "avg_rag_tokens": round(total_rag_tokens / n),
             "avg_output_tokens": round(total_output_tokens / n),
-            "avg_cost_bdt_per_chat": round(((total_overall_tokens / n) * 0.00000015 * 120), 4),
-            "estimated_cost_bdt_1k_chats": round(((total_overall_tokens / n) * 0.00000015 * 120 * 1000), 2)
+            "contracted_token_rate_bdt_per_10k": round(token_rate * 10.0, 2),
+            "is_custom_contract_rate": wallet.is_custom_rate,
+            "avg_cost_bdt_per_chat": round(((total_overall_tokens / n) / 1000.0) * token_rate, 4),
+            "estimated_cost_bdt_1k_chats": round((((total_overall_tokens / n) * 1000.0) / 1000.0) * token_rate, 2)
         },
         "distribution": distribution,
         "interactions": interactions

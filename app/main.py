@@ -23,7 +23,14 @@ async def lifespan(app: FastAPI):
         await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS csat_feedback VARCHAR(500);"))
         await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS first_response_time_ms INTEGER;"))
         await conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP WITH TIME ZONE;"))
-        await conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata_json JSONB DEFAULT '{}'::jsonb;"))
+        await conn.execute(text("ALTER TABLE pricing_plans ADD COLUMN IF NOT EXISTS is_pay_as_you_go BOOLEAN DEFAULT FALSE;"))
+        await conn.execute(text("ALTER TABLE pricing_plans ADD COLUMN IF NOT EXISTS per_1k_tokens_rate_bdt FLOAT DEFAULT 0.15;"))
+        await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS locked_price_bdt FLOAT DEFAULT 0.0;"))
+        await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS locked_token_limit INTEGER DEFAULT 500000;"))
+        await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS is_custom_deal BOOLEAN DEFAULT FALSE;"))
+        await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS deal_notes VARCHAR(500);"))
+        await conn.execute(text("ALTER TABLE tenant_wallets ADD COLUMN IF NOT EXISTS is_custom_rate BOOLEAN DEFAULT FALSE;"))
+        await conn.execute(text("ALTER TABLE tenant_wallets ADD COLUMN IF NOT EXISTS contract_locked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();"))
     yield
 
 app = FastAPI(
@@ -107,8 +114,10 @@ async def run_database_seed():
     Trigger database schema creation & demo seeding via direct HTTP GET request.
     """
     try:
-        from app.seed import seed_database
-        await seed_database()
+        import importlib
+        import app.seed
+        importlib.reload(app.seed)
+        await app.seed.seed_database()
         return {
             "status": "success",
             "message": "Database successfully created and seeded with Bangladeshi E-Commerce demo data!",

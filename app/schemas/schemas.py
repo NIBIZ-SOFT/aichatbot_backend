@@ -654,3 +654,57 @@ class RetryBkashPayment(BaseModel):
     widget_key: str
     visitor_session_id: str
     order_number: str
+
+# ----------------- PAY-AS-YOU-GO & PREPAID WALLET SCHEMAS -----------------
+
+class CustomPlanQuoteRequest(BaseModel):
+    tokens: int = 1_000_000
+    seats: int = 2
+    websites: int = 1
+    knowledge_docs: int = 50
+    is_annual: bool = False
+    modules: Optional[Dict[str, bool]] = None
+
+class CustomPlanQuoteResponse(BaseModel):
+    monthly_price_bdt: float
+    annual_price_bdt: float
+    effective_price_bdt: float
+    annual_savings_bdt: float
+    tokens: int
+    seats: int
+    websites: int
+    knowledge_docs: int
+    breakdown: Dict[str, Any]
+
+class WalletTransactionOut(BaseModel):
+    id: uuid.UUID
+    transaction_type: str
+    amount_bdt: float
+    balance_after_bdt: float
+    tokens_consumed: int
+    bkash_trx_id: Optional[str] = None
+    description: str
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class WalletOut(BaseModel):
+    id: uuid.UUID
+    tenant_id: uuid.UUID
+    balance_bdt: float
+    total_credited_bdt: float
+    total_consumed_bdt: float
+    per_1k_tokens_rate_bdt: float
+    low_balance_threshold_bdt: float
+    is_active: bool
+    recent_transactions: List[WalletTransactionOut] = []
+    class Config:
+        from_attributes = True
+
+class WalletTopupInit(BaseModel):
+    amount_bdt: float
+
+class WalletTopupVerify(BaseModel):
+    payment_id: str
+    trx_id: Optional[str] = None
+

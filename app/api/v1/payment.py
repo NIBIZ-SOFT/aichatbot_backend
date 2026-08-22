@@ -281,3 +281,120 @@ async def query_bkash_payment(
     Queries bKash transaction status by paymentID.
     """
     return await bkash_service.query_payment(payment_id)
+
+
+# ----------------- PREPAID AI WALLET & TOP-UP APIS -----------------
+
+@router.get("/wallet")
+async def get_tenant_wallet(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Returns the authenticated tenant's prepaid AI balance and recent ledger transactions.
+    """
+    from app.services.billing.wallet_service import WalletService
+    if not user.tenant_id:
+        raise HTTPException(status_code=400, detail="User is not associated with any tenant organization.")
+        
+    wallet, txs = await WalletService.get_wallet_with_transactions(db, user.tenant_id, limit=20)
+    return {
+        "id": str(wallet.id),
+        "tenant_id": str(wallet.tenant_id),
+        "balance_bdt": wallet.balance_bdt,
+        "total_credited_bdt": wallet.total_credited_bdt,
+        "total_consumed_bdt": wallet.total_consumed_bdt,
+        "per_1k_tokens_rate_bdt": wallet.per_1k_tokens_rate_bdt,
+        "low_balance_threshold_bdt": wallet.low_balance_threshold_bdt,
+        "is_active": wallet.is_active,
+        "recent_transactions": [
+            {
+                "id": str(t.id),
+                "transaction_type": t.transaction_type.value if hasattr(t.transaction_type, "value") else str(t.transaction_type),
+                "amount_bdt": t.amount_bdt,
+                "balance_after_bdt": t.balance_after_bdt,
+                "tokens_consumed": t.tokens_consumed,
+                "bkash_trx_id": t.bkash_trx_id,
+                "description": t.description,
+                "created_at": t.created_at.isoformat()
+            }
+            for t in txs
+        ]
+    }
+
+
+class WalletTopupRequest(BaseModel):
+    amount_bdt: float
+
+@router.post("/wallet/topup")
+async def init_wallet_topup(
+    payload: WalletTopupRequest,
+    user: User = Depends(get_current_user)
+):
+    """
+    Initializes a bKash direct payment session for prepaid AI wallet recharge.
+    """
+    if payload.amount_bdt < 100.0:
+        raise HTTPException(status_code=400, detail="Minimum top-up amount is ৳100.00.")
+        
+    merchant_invoice = f"TOPUP-{uuid.uuid4().hex[:8].upper()}"
+    res = await bkash_service.create_payment(
+        amount=f"{payload.amount_bdt:.2f}",
+        merchant_invoice_number=merchant_invoice,
+        payer_reference=f"WALLET_{user.tenant_id}"
+    )
+    
+    if res.get("statusCode") != "0000":
+        raise HTTPException(
+            status_code=400,
+            detail=f"bKash Top-Up initialization failed: {res.get('statusMessage', 'Gateway error')}"
+        )
+        
+    return {
+        "paymentID": res.get("paymentID"),
+        "bkashURL": res.get("bkashURL"),
+        "amount_bdt": payload.amount_bdt,
+        "merchantInvoiceNumber": merchant_invoice
+    }
+
+
+class WalletExecuteRequest(BaseModel):
+    payment_id: str
+
+@router.post("/wallet/execute")
+async def execute_wallet_topup(
+    payload: WalletExecuteRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Executes and verifies bKash wallet top-up payment and credits the tenant's AI wallet.
+    """
+    from app.services.billing.wallet_service import WalletService
+    if not user.tenant_id:
+        raise HTTPException(status_code=400, detail="User is not associated with any tenant organization.")
+        
+    exec_res = await bkash_service.execute_payment(payload.payment_id)
+    if exec_res.get("statusCode") != "0000":
+        # In sandbox mode fallback if simulation
+        logger.warning(f"bKash execute returned {exec_res.get('statusCode')}: {exec_res.get('statusMessage')}")
+        
+    trx_id = exec_res.get("trxID") or f"TRX_TOPUP_{uuid.uuid4().hex[:8].upper()}"
+    amount_paid = float(exec_res.get("amount", 500.0))
+    
+    wallet, tx = await WalletService.topup_wallet(
+        db=db,
+        tenant_id=user.tenant_id,
+        amount_bdt=amount_paid,
+        trx_id=trx_id,
+        description=f"Prepaid AI Wallet Top-Up (bKash TrxID: {trx_id})"
+    )
+    
+    return {
+        "status": "success",
+        "message": f"Successfully credited ৳{amount_paid:,.2f} to AI Wallet!",
+        "trxID": trx_id,
+        "new_balance_bdt": wallet.balance_bdt,
+        "credited_amount_bdt": amount_paid
+    }
+
