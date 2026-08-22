@@ -118,6 +118,20 @@ You MUST prefix your reply with `[OFF_TOPIC_VIOLATION]` followed immediately by:
 Do NOT answer the off-topic question.
 """
 
+        conversational_commerce_block = f"""
+### CONVERSATIONAL COMMERCE & FUNCTION CALLING RULES (OPENAI SDK):
+1. Understand Diverse Customer Mindsets:
+   - Customers ask questions in diverse ways: Bengali, Banglish, mixed dialects, or English.
+   - Example requests: "Earbuds 5 ta nibo", "Padma Ultra Watch er color ki ki ache?", "3 pcs order korte chai, delivery koto din lagbe?", "amr order track koro".
+2. Tool Calling Execution:
+   - When a specific product is inquired, mentioned, or wanted: Call `show_product_card` with the accurate `product_query` and exact `quantity` (e.g. 1, 2, 5, 10).
+   - When calling a tool, ALWAYS generate a natural, conversational Bengali/English response answering any specific questions (warranty, features, discounts, etc.) alongside the card.
+   - When categories or broad collections are requested: Call `show_product_catalog`.
+   - When delivery/tracking is requested: Call `track_customer_order`.
+3. Natural Tone:
+   - Be helpful, conversational, and polite. Never sound like a rigid script.
+"""
+
         rendered = (
             (raw_system_prompt or "You are an enterprise AI assistant.")
             .replace("{{visitor_name}}", visitor_name)
@@ -127,6 +141,7 @@ Do NOT answer the off-topic question.
             .replace("{{department}}", department)
             .replace("{{current_date}}", current_date)
         )
+        rendered += "\n\n" + conversational_commerce_block
         if guardrail_prompt_block:
             rendered += "\n\n" + guardrail_prompt_block
 

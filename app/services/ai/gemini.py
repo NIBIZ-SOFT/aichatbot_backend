@@ -10,17 +10,17 @@ COMMERCE_TOOLS = [
         "type": "function",
         "function": {
             "name": "show_product_card",
-            "description": "Call this to display an interactive product card when the customer asks about, selects, or wants to buy a specific individual product in Bengali, Banglish, or English. Extract the core English/Bengali product keywords (e.g. 'panjabi', 'smartwatch', 'earbuds', 'kabli', 'jamdani saree', 'polo t-shirt', 'kurti', 'soundbar', 'headphones', 'power bank', 'gaming keyboard', 'oxford shoe', 'sneakers', 'laptop bag', 'wallet', 'diffuser', 'flask').",
+            "description": "Call this tool whenever a customer asks about, selects, shows interest in, or wants to buy an individual product in Bengali, Banglish, or English. Accurately extract the product search terms in 'product_query' and any requested quantity (e.g. 1, 2, 5, 10, '৫টি', '5 ta', '5 pcs') in 'quantity'. You MUST ALSO generate a natural, helpful text response answering any specific customer questions (warranty, features, discounts, etc.).",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "product_query": {
                         "type": "string",
-                        "description": "The normalized search keywords or product name requested by user (e.g. 'panjabi', 'smartwatch pro', 'jamdani saree', 'sneakers', 'diffuser', 'soundbar', 'wallet')"
+                        "description": "The product name or search keywords mentioned by the customer (e.g. 'Padma SoundPro Earbuds', 'Panjabi', 'Smartwatch Pro', 'Sneakers', 'Jamdani Saree', 'Diffuser')"
                     },
                     "quantity": {
                         "type": "integer",
-                        "description": "Quantity or units requested if mentioned (e.g. 1, 2, 5). Defaults to 1."
+                        "description": "The number of units or quantity requested by the customer (e.g. 1, 2, 5, 10). Defaults to 1 if not specified."
                     }
                 },
                 "required": ["product_query"]
@@ -31,13 +31,13 @@ COMMERCE_TOOLS = [
         "type": "function",
         "function": {
             "name": "show_product_catalog",
-            "description": "Call this to display an interactive scrollable multi-product carousel when the customer asks for a category of items or general collections (e.g. 'all smartwatches', 'shoes collection', 'audio devices', 'fashion clothes', 'all products').",
+            "description": "Call this tool to show an interactive product carousel when a customer asks to see categories, collections, or store catalog (e.g. 'all smartwatches', 'shoes collection', 'what clothes do you have?', 'show catalog', 'সব প্রোডাক্ট দেখাও').",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "category": {
                         "type": "string",
-                        "description": "Category or item type requested: 'Smartwatch', 'Footwear', 'Fashion', 'Audio', 'Gadgets', 'Bags', 'Home', or 'all' for storewide catalog."
+                        "description": "Category or item type requested (e.g. 'Smartwatch', 'Footwear', 'Fashion', 'Audio', 'Gadgets', 'Bags', 'Home') or 'all' for full catalog."
                     }
                 },
                 "required": ["category"]
@@ -48,7 +48,7 @@ COMMERCE_TOOLS = [
         "type": "function",
         "function": {
             "name": "track_customer_order",
-            "description": "Call this to display the live order tracking card with stepper progress when the customer asks to track their order, check parcel status, courier delivery, or provides an order number (e.g. 'ORD-20260820-AEB2').",
+            "description": "Call this tool to display live order tracking with status updates when a customer asks to track their order, check parcel status, courier delivery, or provides an order number.",
             "parameters": {
                 "type": "object",
                 "properties": {
