@@ -2,6 +2,16 @@
 .vscode/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 .venv/
 venv/
+env/
 .env
+.env*
+*.log
+logs/
+.DS_Store
+tests/
+README.md
+*.md
