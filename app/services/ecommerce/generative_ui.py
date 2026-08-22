@@ -31,6 +31,39 @@ class GenerativeUIService:
         return re.sub(r'[^\w\s]', ' ', (text or '').lower()).strip()
 
     @classmethod
+    def extract_quantity(cls, text: str) -> int:
+        """
+        Extracts quantity from Bangla, Banglish, and English shopping requests.
+        Examples: '5 ta', '5ta', '৫টা', '৫টি', '5 pcs', '5 piece', 'qty 5', 'পাঁচটা', '২টি'
+        """
+        if not text:
+            return 1
+            
+        bangla_digits = {'০':'0', '১':'1', '২':'2', '৩':'3', '৪':'4', '৫':'5', '৬':'6', '৭':'7', '৮':'8', '৯':'9'}
+        norm_text = text.lower()
+        for b_char, d_val in bangla_digits.items():
+            norm_text = norm_text.replace(b_char, d_val)
+        
+        # Match explicit digits with suffixes: 5 ta, 5ta, 5 pcs, 5টি, qty 5, etc.
+        match = re.search(r'(?:(?:qty|quantity|মোট)\s*[:=]?\s*(\d+))|(\d+)\s*(?:ta|টি|টা|pc|pcs|piece|pieces|ti|unit|units|জোড়া)', norm_text)
+        if match:
+            qty_str = match.group(1) or match.group(2)
+            if qty_str and qty_str.isdigit():
+                return max(1, int(qty_str))
+                
+        # Word numbers in Bengali
+        word_map = {
+            'একটি': 1, 'একটা': 1, 'দুটি': 2, 'দুইটা': 2, 'তিনটি': 3, 'তিনটা': 3,
+            'চারটি': 4, 'চারটা': 4, 'পাঁচটি': 5, 'পাঁচটা': 5, 'ছয়টি': 6, 'ছয়টা': 6,
+            'সাতটি': 7, 'সাতটা': 7, 'আটটি': 8, 'আটটা': 8, 'নয়টি': 9, 'নয়টা': 9, 'দশটি': 10, 'দশটা': 10
+        }
+        for w, num in word_map.items():
+            if w in text:
+                return num
+                
+        return 1
+
+    @classmethod
     def serialize_product(cls, p: Product, initial_quantity: int = 1) -> Dict[str, Any]:
         return {
             "id": str(p.id),
@@ -87,7 +120,11 @@ class GenerativeUIService:
         """
         if tool_name == "show_product_card":
             prod_query = str(tool_args.get("product_query", "")).strip()
-            qty = int(tool_args.get("quantity", 1))
+            raw_qty = tool_args.get("quantity")
+            if raw_qty and int(raw_qty) > 1:
+                qty = int(raw_qty)
+            else:
+                qty = cls.extract_quantity(prod_query) if prod_query else 1
 
             stmt = select(Product).where(Product.tenant_id == tenant_id, Product.is_active == True)
             
@@ -270,11 +307,12 @@ class GenerativeUIService:
 
         # Direct SQL Product Match Fallback
         if clean_q and len(clean_q) > 3:
+            extracted_qty = cls.extract_quantity(user_query)
             comp = await cls.resolve_from_tool_call(
                 db=db,
                 tenant_id=tenant_id,
                 tool_name="show_product_card",
-                tool_args={"product_query": user_query, "quantity": 1},
+                tool_args={"product_query": user_query, "quantity": extracted_qty},
                 conversation_id=conversation_id,
                 visitor_phone=visitor_phone
             )

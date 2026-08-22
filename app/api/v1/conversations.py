@@ -474,7 +474,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
             raw_ai_text = ai_res.get("text", "")
             tool_calls = ai_res.get("tool_calls", [])
 
-            # Resolve Generative UI Component from LLM Function Calling tool calls if present
+            # 1. Resolve Generative UI Component from LLM Function Calling tool calls if present
             if tool_calls and not ui_component:
                 ui_component = await GenerativeUIService.resolve_ui_component(
                     db=db,
@@ -485,19 +485,35 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                     visitor_phone=conv_phone
                 )
 
-            # If model returned tool calls with empty text, synthesize a concise conversational response
-            if not raw_ai_text and ui_component:
+            # 2. Fallback direct SQL matching if no tool call emitted
+            if not ui_component:
+                ui_component = await GenerativeUIService.resolve_ui_component(
+                    db=db,
+                    tenant_id=widget.tenant_id,
+                    user_query=payload.content,
+                    ai_response_text=raw_ai_text,
+                    rag_chunks=rag_chunks,
+                    conversation_id=conversation.id,
+                    visitor_phone=conv_phone
+                )
+
+            # 3. If model returned empty text or generic greeting, synthesize a concise, helpful shopping response
+            if ui_component:
                 comp_type = ui_component.get("type")
                 if comp_type == "product_card":
                     p_info = ui_component.get("data", {}).get("product", {})
-                    raw_ai_text = f"আপনার অনুরোধ অনুযায়ী {p_info.get('title')} নিচে দেওয়া হলো। সরাসরি ⚡ Buy Now বা 🛒 Add to Cart বাটনে ক্লিক করে অর্ডার করতে পারেন।"
+                    p_title = p_info.get("title", "প্রোডাক্ট")
+                    p_qty = p_info.get("initial_quantity", 1)
+                    qty_suffix = f" ({p_qty}টি)" if p_qty > 1 else ""
+                    if not raw_ai_text or raw_ai_text == "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?":
+                        raw_ai_text = f"আপনার অনুরোধ অনুযায়ী {p_title}{qty_suffix} নিচে দেওয়া হলো। সরাসরি ⚡ Buy Now বা 🛒 Add to Cart বাটনে ক্লিক করে অর্ডার করতে পারেন।"
                 elif comp_type == "product_carousel":
-                    raw_ai_text = "আমাদের স্টোরের প্রোডাক্ট কালেকশন নিচে দেওয়া হলো। আপনার পছন্দের প্রোডাক্টটি বেছে নিয়ে সরাসরি অর্ডার করতে পারেন।"
+                    if not raw_ai_text or raw_ai_text == "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?":
+                        raw_ai_text = "আমাদের স্টোরের প্রোডাক্ট কালেকশন নিচে দেওয়া হলো। আপনার পছন্দের প্রোডাক্টটি বেছে নিয়ে সরাসরি অর্ডার করতে পারেন।"
                 elif comp_type == "order_tracking_card":
                     o_info = ui_component.get("data", {}).get("order", {})
-                    raw_ai_text = f"আপনার অর্ডার {o_info.get('order_number')}-এর লাইভ ট্র্যাকিং স্ট্যাটাস নিচে দেওয়া হলো।"
-                else:
-                    raw_ai_text = "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?"
+                    if not raw_ai_text or raw_ai_text == "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?":
+                        raw_ai_text = f"আপনার অর্ডার {o_info.get('order_number')}-এর লাইভ ট্র্যাকিং স্ট্যাটাস নিচে দেওয়া হলো।"
 
             # Process AI Guardrail & Multi-Strike Auto-Pause Policy via AISafetyAndRulesEngine
             ai_reply_text = raw_ai_text or "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?"
@@ -506,7 +522,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 current_strikes = conv_meta.get("off_topic_strikes", 0)
                 
                 eval_res = AISafetyAndRulesEngine.evaluate_guardrail_response(
-                    ai_reply_text=raw_ai_text,
+                    ai_reply_text=ai_reply_text,
                     guardrails_cfg=guardrails_cfg,
                     current_strikes=current_strikes
                 )
@@ -528,17 +544,6 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                     })
 
                 conversation.visitor_metadata = conv_meta
-
-            if not ui_component:
-                ui_component = await GenerativeUIService.resolve_ui_component(
-                    db=db,
-                    tenant_id=widget.tenant_id,
-                    user_query=payload.content,
-                    ai_response_text=ai_reply_text,
-                    rag_chunks=rag_chunks,
-                    conversation_id=conversation.id,
-                    visitor_phone=conv_phone
-                )
 
             token_breakdown = dict(ai_res.get("token_breakdown", {}))
             if ui_component:
