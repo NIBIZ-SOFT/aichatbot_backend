@@ -162,16 +162,19 @@ async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Dep
 
     # Fetch tenant ecommerce settings
     tenant = await db.get(Tenant, widget.tenant_id)
+    tenant_category = (tenant.business_category or widget.business_category or "ecommerce").lower() if tenant else "ecommerce"
     t_ecom = tenant.ecommerce_settings if tenant and tenant.ecommerce_settings else {}
+
+    is_ecommerce = (tenant_category == "ecommerce")
 
     # Merge website-level overrides with tenant defaults
     w_ecom = widget.ecommerce_config or {}
     merged_ecommerce = {
-        "enabled": widget.business_category == "ecommerce" or w_ecom.get("enabled", True),
-        "show_products_carousel": w_ecom.get("show_products_carousel", True),
-        "allow_instant_checkout": w_ecom.get("allow_instant_checkout", True),
-        "cod_enabled": w_ecom.get("cod_enabled", t_ecom.get("cod_enabled", True)),
-        "bkash_enabled": w_ecom.get("bkash_enabled", t_ecom.get("bkash", {}).get("enabled", False)),
+        "enabled": is_ecommerce and w_ecom.get("enabled", True),
+        "show_products_carousel": is_ecommerce and w_ecom.get("show_products_carousel", True),
+        "allow_instant_checkout": is_ecommerce and w_ecom.get("allow_instant_checkout", True),
+        "cod_enabled": is_ecommerce and w_ecom.get("cod_enabled", t_ecom.get("cod_enabled", True)),
+        "bkash_enabled": is_ecommerce and w_ecom.get("bkash_enabled", t_ecom.get("bkash", {}).get("enabled", False)),
         "delivery_charge_inside_dhaka": float(w_ecom.get("delivery_charge_inside_dhaka", t_ecom.get("delivery_charge_inside_dhaka", 60.0))),
         "delivery_charge_outside_dhaka": float(w_ecom.get("delivery_charge_outside_dhaka", t_ecom.get("delivery_charge_outside_dhaka", 120.0)))
     }
@@ -185,7 +188,7 @@ async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Dep
             "welcome_message": widget.welcome_message,
             "primary_color": widget.primary_color,
             "position": widget.position,
-            "business_category": widget.business_category or "ecommerce",
+            "business_category": tenant_category,
             "ecommerce": merged_ecommerce,
             "branding": widget.branding_config or {}
         },

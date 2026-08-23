@@ -122,14 +122,45 @@ async def provision_new_tenant(payload: TenantProvisionRequest, db: AsyncSession
     if existing_user.scalars().first():
         raise HTTPException(status_code=400, detail="An account with this email already exists.")
 
-    # 2. Create Tenant
+    # 2. Create Tenant with Category-Specific Modules
     slug = payload.organization_name.lower().replace(" ", "-").replace(".", "")[:30] + f"-{uuid.uuid4().hex[:6]}"
+    category = payload.business_category.lower() if payload.business_category else "ecommerce"
+    
+    if category == "erp":
+        enabled_modules = {
+            "dashboard": True, "inbox": True, "contacts": True,
+            "products": False, "orders": False, "knowledge": True,
+            "websites": True, "analytics": True, "usage": True,
+            "team": True, "settings": True, "subscription": True
+        }
+        assistant_instruction = f"You are the official Enterprise AI Assistant for {payload.organization_name}. You specialize in enterprise business support, SLA tickets, customer inquiries, meeting scheduling, and corporate knowledge documentation."
+    elif category == "services":
+        enabled_modules = {
+            "dashboard": True, "inbox": True, "contacts": True,
+            "products": False, "orders": False, "knowledge": True,
+            "websites": True, "analytics": True, "usage": True,
+            "team": True, "settings": True, "subscription": True
+        }
+        assistant_instruction = f"You are the official Consulting & Service AI Assistant for {payload.organization_name}. Assist clients with consultation bookings, service inquiries, and project FAQs."
+    else:
+        # Default E-Commerce
+        category = "ecommerce"
+        enabled_modules = {
+            "dashboard": True, "inbox": True, "contacts": True,
+            "products": True, "orders": True, "knowledge": True,
+            "websites": True, "analytics": True, "usage": True,
+            "team": True, "settings": True, "subscription": True
+        }
+        assistant_instruction = f"You are {payload.organization_name}'s smart E-Commerce Shopping Assistant. Help customers find products, select sizes, track delivery, and place orders via bKash COD."
+
     tenant = Tenant(
         name=payload.organization_name,
         slug=slug,
+        business_category=category,
         is_active=True,
         whitelabel_enabled=(payload.subscription_tier == SubscriptionTier.ENTERPRISE),
-        branding_config={"brand_name": payload.organization_name, "primary_color": "#4F46E5"}
+        branding_config={"brand_name": payload.organization_name, "primary_color": "#4F46E5"},
+        enabled_modules=enabled_modules
     )
     db.add(tenant)
     await db.flush()
@@ -170,11 +201,11 @@ async def provision_new_tenant(payload: TenantProvisionRequest, db: AsyncSession
     # 5. Provision Default AI Assistant
     assistant = AIAssistant(
         tenant_id=tenant.id,
-        name=f"{payload.organization_name} Support AI",
-        description="Primary customer support AI assistant",
+        name=f"{payload.organization_name} Assistant",
+        description=f"Primary {category.upper()} AI assistant",
         model_name="gemini-1.5-flash",
         temperature=0.3,
-        system_instruction=f"You are the official AI Assistant for {payload.organization_name}. Greet visitors warmly and answer using verified knowledge.",
+        system_instruction=assistant_instruction,
         fallback_message="I am connecting you with our human support team.",
         auto_handover_keywords=["agent", "human", "help", "support", "talk to human"]
     )

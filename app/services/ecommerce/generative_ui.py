@@ -239,6 +239,39 @@ class GenerativeUIService:
                     }
                 }
 
+        elif tool_name in ["create_support_ticket", "open_ticket", "raise_ticket"]:
+            ticket_id = f"TICK-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+            subject = str(tool_args.get("subject", "Enterprise Support Ticket")).strip()
+            priority = str(tool_args.get("priority", "High")).strip().capitalize()
+            department = str(tool_args.get("department", "Technical Operations")).strip()
+            return {
+                "type": "ticket_card",
+                "data": {
+                    "ticket_id": ticket_id,
+                    "subject": subject,
+                    "priority": priority,
+                    "department": department,
+                    "status": "OPEN",
+                    "sla_response_time": "15 mins",
+                    "created_at": datetime.now().isoformat()
+                }
+            }
+
+        elif tool_name in ["schedule_meeting", "book_demo", "schedule_consultation"]:
+            topic = str(tool_args.get("topic", "Enterprise ERP Consultation & Live Demo")).strip()
+            preferred_date = str(tool_args.get("date", "Next Available Slot (Tomorrow 3:00 PM)")).strip()
+            return {
+                "type": "meeting_card",
+                "data": {
+                    "booking_id": f"MTG-{uuid.uuid4().hex[:6].upper()}",
+                    "topic": topic,
+                    "preferred_date": preferred_date,
+                    "duration": "30 mins",
+                    "status": "SCHEDULED",
+                    "meeting_link": "https://meet.google.com/xyz-enterprise-demo"
+                }
+            }
+
         return None
 
     @classmethod

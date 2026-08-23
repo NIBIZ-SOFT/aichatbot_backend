@@ -96,6 +96,24 @@ ALL_AVAILABLE_MODULES: Dict[str, Dict[str, Any]] = {
         "default_starter": True,
         "default_pro": True,
         "default_enterprise": True
+    },
+    "products": {
+        "id": "products",
+        "name": "Product Catalog & Inventory",
+        "description": "Manage products, prices, images, and CDN widget priority rankings.",
+        "category": "COMMERCE",
+        "default_starter": True,
+        "default_pro": True,
+        "default_enterprise": True
+    },
+    "orders": {
+        "id": "orders",
+        "name": "Orders & Courier Dispatch",
+        "description": "Track online orders, verify bKash payments, and dispatch with SMS alerts.",
+        "category": "COMMERCE",
+        "default_starter": True,
+        "default_pro": True,
+        "default_enterprise": True
     }
 }
 
@@ -112,17 +130,22 @@ class TenantModuleService:
     @staticmethod
     def resolve_tenant_modules(tenant: Optional[Tenant]) -> Dict[str, bool]:
         """
-        Returns full boolean map for all 10 modules for a tenant.
-        If a tenant has empty/sparse enabled_modules, defaults gracefully to full access.
+        Returns full boolean map for all modules for a tenant.
+        Adapts default commerce module visibility based on tenant business_category.
         """
         if not tenant:
             return DEFAULT_FULL_MODULES.copy()
 
+        category = (tenant.business_category or "ecommerce").lower()
+        is_ecom = (category == "ecommerce")
+
         stored = tenant.enabled_modules or {}
         resolved = {}
         for mod_id in ALL_AVAILABLE_MODULES.keys():
-            # If explicitly set in JSON, respect it; otherwise default to True
-            resolved[mod_id] = stored.get(mod_id, True)
+            if mod_id in ["products", "orders"]:
+                resolved[mod_id] = stored.get(mod_id, is_ecom)
+            else:
+                resolved[mod_id] = stored.get(mod_id, True)
 
         return resolved
 

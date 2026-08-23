@@ -25,6 +25,7 @@ class TenantProvisionRequest(BaseModel):
     password: str
     subscription_tier: SubscriptionTier = SubscriptionTier.STARTER
     billing_cycle: str = "monthly"
+    business_category: Optional[str] = "ecommerce"  # "ecommerce" | "erp" | "services"
 
 class TokenResponse(BaseModel):
     access_token: str
