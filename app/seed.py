@@ -242,7 +242,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             assistant_id=assistant_support.id,
             name="Padma Mart Main Storefront",
             domain="padmamart.com.bd",
-            widget_key=f"wg_shop_{uuid.uuid4().hex[:12]}",
+            widget_key="wg_padma_shop_demo",
             primary_color="#4F46E5",
             header_title="Padma Mart Live Support",
             welcome_message="Hello! Welcome to Padma Mart. Need help tracking an order, finding products, or checking sizes?",

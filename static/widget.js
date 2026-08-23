@@ -1131,7 +1131,7 @@
           </div>
         </div>
         <div class="aiaas-header-actions">
-          <button class="aiaas-cart-btn" id="aiaas-btn-header-cart" title="View Shopping Cart">
+          <button class="aiaas-cart-btn" id="aiaas-btn-header-cart" title="View Shopping Cart" style="display:none;">
             🛒 <span class="aiaas-cart-badge" id="aiaas-cart-badge" style="display:none;">0</span>
           </button>
           <button class="aiaas-handover-btn" id="aiaas-btn-handover">👤 Talk to Human</button>
@@ -1162,12 +1162,8 @@
       <!-- Active Message Thread -->
       <div class="aiaas-messages" style="display: ${visitorName ? 'flex' : 'none'};"></div>
 
-      <!-- Quick Action Chips for E-Commerce -->
-      <div class="aiaas-quick-chips" style="display: ${visitorName ? 'flex' : 'none'};">
-        <button class="aiaas-chip" id="aiaas-chip-products">🛍️ Browse Products</button>
-        <button class="aiaas-chip" id="aiaas-chip-order">📦 Track Order</button>
-        <button class="aiaas-chip" id="aiaas-chip-human">👤 Support Agent</button>
-      </div>
+      <!-- Adaptive Quick Action Chips (Dynamically Rendered for E-Com vs ERP) -->
+      <div class="aiaas-quick-chips" style="display: ${visitorName ? 'flex' : 'none'};"></div>
 
       <!-- Sticky Bottom Cart Summary Bar (appears when items are in cart) -->
       <div class="aiaas-cart-bar" id="aiaas-cart-bar" style="display:none;">
@@ -1265,9 +1261,6 @@
 
     var messagesBox = win.querySelector(".aiaas-messages");
     var chipsBox = win.querySelector(".aiaas-quick-chips");
-    var chipProducts = win.querySelector("#aiaas-chip-products");
-    var chipOrder = win.querySelector("#aiaas-chip-order");
-    var chipHuman = win.querySelector("#aiaas-chip-human");
 
     var cartBar = win.querySelector("#aiaas-cart-bar");
     var btnBarCheckout = win.querySelector("#aiaas-btn-bar-checkout");
@@ -1282,10 +1275,60 @@
     var chkCity = win.querySelector("#aiaas-chk-city");
     var chkPayment = win.querySelector("#aiaas-chk-payment");
 
+    // Adaptive Business Model & Archetype Flags
+    var isEcomEnabled = false;
+    var currentBusinessCategory = "ecommerce";
+
+    function renderAdaptiveChips(category, isEcom) {
+      if (!chipsBox) return;
+      chipsBox.innerHTML = "";
+
+      var chips = [];
+      if (category === "erp") {
+        chips = [
+          { text: "📅 Book Live Demo", query: "আমাদের ফ্যাক্টরির জন্য একটি লাইভ ডেমো শিডিউল করতে চাই" },
+          { text: "🎫 Open SLA Ticket", query: "আমাদের ব্যাংক রিকনসিলিয়েশন ও Mushak 6.3 ভ্যাটে এরর আসছে, আর্জেন্ট সাপোর্ট টিকেট দরকার" },
+          { text: "💰 Pricing & Plans", query: "Apex ERP এর মাসিক প্রাইসিং কত এবং কি কি প্যাকেজ আছে?" },
+          { text: "👤 Talk to Specialist", action: "handover" }
+        ];
+      } else if (category === "services") {
+        chips = [
+          { text: "📅 Book Consultation", query: "আমি একটি কনসালটেশন শিডিউল করতে চাই" },
+          { text: "💼 Our Services", query: "আপনাদের সার্ভিস ও প্যাকেজ সম্পর্কে জানতে চাই" },
+          { text: "👤 Talk to Consultant", action: "handover" }
+        ];
+      } else {
+        // E-Commerce
+        chips = [
+          { text: "🛍️ Browse Products", action: "browse" },
+          { text: "📦 Track Order", query: "আমার অর্ডার ট্র্যাক করতে চাই" },
+          { text: "👤 Support Agent", action: "handover" }
+        ];
+      }
+
+      chips.forEach(function (c) {
+        var btn = document.createElement("button");
+        btn.className = "aiaas-chip";
+        btn.textContent = c.text;
+        btn.addEventListener("click", function () {
+          if (c.action === "browse") {
+            loadAndRenderProducts();
+          } else if (c.action === "handover") {
+            handoverBtn.click();
+          } else if (c.query) {
+            inputEl.value = c.query;
+            sendMessage();
+          }
+        });
+        chipsBox.appendChild(btn);
+      });
+    }
+
     // Cart State Engine (Persistent in visitor localStorage)
     var cartItems = [];
 
     function loadCart() {
+      if (!isEcomEnabled) return;
       try {
         var raw = localStorage.getItem("aiaas_cart_" + widgetKey);
         if (raw) {
@@ -1298,6 +1341,7 @@
     }
 
     function saveCart() {
+      if (!isEcomEnabled) return;
       try {
         localStorage.setItem("aiaas_cart_" + widgetKey, JSON.stringify(cartItems));
       } catch (e) { }
@@ -1375,6 +1419,10 @@
     }
 
     function updateCartBadges() {
+      if (!isEcomEnabled) {
+        if (cartBar) cartBar.style.display = "none";
+        return;
+      }
       var count = getCartCount();
       var subtotal = getCartSubtotal();
 
@@ -1605,7 +1653,10 @@
       footerBox.style.display = "flex";
       inputEl.focus();
 
-      loadCart();
+      if (isEcomEnabled) {
+        loadCart();
+      }
+      renderAdaptiveChips(currentBusinessCategory, isEcomEnabled);
       initSession();
     });
 
@@ -2032,23 +2083,9 @@
       });
     }
 
-    // Load persisted cart on init
-    loadCart();
-
-    if (chipProducts) {
-      chipProducts.addEventListener("click", function () {
-        loadAndRenderProducts();
-      });
-    }
-    if (chipOrder) {
-      chipOrder.addEventListener("click", function () {
-        appendMessage("To track your delivery, please provide your **Order Number** (e.g. `ORD-20260819-xxxx`) or Phone Number.", "ai", "AI Assistant");
-      });
-    }
-    if (chipHuman) {
-      chipHuman.addEventListener("click", function () {
-        handoverBtn.click();
-      });
+    // Load persisted cart on init if ecommerce is active
+    if (isEcomEnabled) {
+      loadCart();
     }
 
     // Render Interactive bKash Pending Action Card with 5-Minute Auto-Expiry Timer
@@ -2363,6 +2400,25 @@
         conversationId = data.conversation_id;
 
         if (data.widget) {
+          isEcomEnabled = Boolean(data.widget.ecommerce && data.widget.ecommerce.enabled);
+          currentBusinessCategory = (data.widget.business_category || (isEcomEnabled ? "ecommerce" : "erp")).toLowerCase();
+
+          // Adaptive Header Cart Button display
+          if (btnHeaderCart) {
+            btnHeaderCart.style.display = isEcomEnabled ? "inline-flex" : "none";
+          }
+          if (!isEcomEnabled && cartBar) {
+            cartBar.style.display = "none";
+          }
+
+          // Adaptive Quick Action Chips
+          renderAdaptiveChips(currentBusinessCategory, isEcomEnabled);
+
+          // Visitor Cart Initializer
+          if (isEcomEnabled) {
+            loadCart();
+          }
+
           var titleText = data.widget.header_title || data.widget.name || "Live Support";
           titleEl.textContent = titleText;
           var prechatTitle = win.querySelector(".aiaas-prechat-title");
