@@ -98,6 +98,7 @@ async def delete_product(
 
 
 @router.patch("/products/{product_id}/priority", response_model=ProductOut)
+@router.put("/products/{product_id}/priority", response_model=ProductOut)
 async def set_product_priority(
     product_id: uuid.UUID,
     priority: int = Query(..., ge=0, description="New priority rank (1=highest, 0=unranked). Auto-shifts others."),
@@ -116,7 +117,25 @@ async def set_product_priority(
         tenant_id=tenant.id,
         data=ProductUpdate(priority=priority)
     )
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
     return product
+
+
+@router.post("/products/normalize-priorities")
+async def normalize_product_priorities(
+    tenant: Tenant = Depends(require_active_tenant),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Tenant-Scoped Priority Normalization:
+    Ensures all ranked products for the tenant form a clean, gapless 1..N sequence.
+    """
+    service = ProductService(db)
+    await service.normalize_priorities(tenant.id)
+    await db.commit()
+    return {"status": "success", "message": "Tenant product priorities normalized to gapless 1-indexed sequence."}
+
 
 @router.post("/products/generate-tags", response_model=ProductGenerateTagsResponse)
 async def generate_product_tags(

@@ -146,6 +146,25 @@ class ProductService:
         )
         await self.db.flush()
 
+    async def normalize_priorities(self, tenant_id: uuid.UUID) -> None:
+        """
+        Tenant-Isolated Priority Normalizer.
+        Compacts all ranked products (priority > 0) of a single tenant into a strict,
+        gapless, 1-indexed sequence: 1, 2, 3, ..., N.
+        Completely isolated to the given tenant_id.
+        """
+        stmt = (
+            select(Product)
+            .where(Product.tenant_id == tenant_id, Product.priority > 0)
+            .order_by(Product.priority.asc(), Product.created_at.asc())
+        )
+        res = await self.db.execute(stmt)
+        ranked_products = res.scalars().all()
+        for idx, p in enumerate(ranked_products, start=1):
+            if p.priority != idx:
+                p.priority = idx
+        await self.db.flush()
+
     async def generate_ai_tags(
         self,
         title: str,
@@ -278,6 +297,8 @@ class ProductService:
             product.slug = f"{self.slugify(update_dict['title'])}-{uuid.uuid4().hex[:6]}"
 
         await self.db.flush()
+        if "priority" in update_dict:
+            await self.normalize_priorities(tenant_id)
         await self._sync_product_vector(product)
         await self.db.commit()
         await self.db.refresh(product)
@@ -298,6 +319,8 @@ class ProductService:
             )
         )
         await self.db.delete(product)
+        await self.db.flush()
+        await self.normalize_priorities(tenant_id)
         await self.db.commit()
         return True
 

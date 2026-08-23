@@ -289,7 +289,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="100% Egyptian Cotton handcrafted Panjabi with intricate thread embroidery on collar and placket. Available in Royal Blue, Black, Maroon, and White.",
             specifications={"Material": "100% Egyptian Cotton", "Sizes": "M (38), L (40), XL (42), XXL (44)", "Fit": "Slim Fit & Regular Fit", "Occasion": "Eid / Festive"},
             tags=["eid", "festive", "cotton", "men", "panjabi"],
-            priority=10
+            priority=1
         )
         prod_earbuds = Product(
             id=uuid.uuid4(),
@@ -306,7 +306,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="High-fidelity audio with 35dB Active Noise Cancellation, Bluetooth 5.3, 40-hour total battery life with wireless charging case.",
             specifications={"Battery Life": "8h earbuds + 32h case", "ANC": "35dB Active Noise Cancellation", "Water Resistance": "IPX5", "Warranty": "6 Months Official"},
             tags=["earbuds", "anc", "wireless", "audio", "bluetooth"],
-            priority=9
+            priority=2
         )
         prod_smartwatch = Product(
             id=uuid.uuid4(),
@@ -323,7 +323,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="1.96-inch AMOLED always-on display, Bluetooth calling with noise reduction mic, 24/7 Heart rate & SpO2 monitoring, and 100+ sports modes.",
             specifications={"Display": "1.96-inch AMOLED (410x502)", "Battery": "7-day battery life", "Straps": "Includes 2 straps (Silicone & Leather)", "Waterproof": "IP68"},
             tags=["smartwatch", "amoled", "calling", "fitness", "watch"],
-            priority=8
+            priority=3
         )
         prod_saree = Product(
             id=uuid.uuid4(),
@@ -340,7 +340,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="Traditional 84-count cotton silk hand-woven Dhakai Jamdani saree with fine golden zari floral motifs, perfect for weddings and cultural festivals.",
             specifications={"Fabric": "Pure Cotton Silk", "Length": "12 Haat with Blouse Piece", "Craft": "Handloom Weave", "Color": "Crimson Red with Golden Zari"},
             tags=["saree", "jamdani", "dhakai", "women", "traditional", "wedding"],
-            priority=7
+            priority=4
         )
         prod_polo = Product(
             id=uuid.uuid4(),
@@ -357,7 +357,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="220 GSM breathable pique cotton polo shirt with ribbed collar, horn buttons, and anti-shrink enzyme wash finish.",
             specifications={"Fabric": "100% Pique Cotton (220 GSM)", "Sizes": "S, M, L, XL, XXL", "Colors": "Navy Blue, Olive Green, Charcoal, White"},
             tags=["polo", "t-shirt", "casual", "men", "summer"],
-            priority=6
+            priority=5
         )
         prod_kurti = Product(
             id=uuid.uuid4(),
@@ -374,7 +374,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="Contemporary flared A-line georgette kurti with intricate Kashmiri neckline thread embroidery and inner santoon lining.",
             specifications={"Fabric": "Pure Georgette with Lining", "Sizes": "38 (M), 40 (L), 42 (XL), 44 (XXL)", "Work": "Kashmiri Thread Embroidery"},
             tags=["kurti", "women", "georgette", "designer", "ethnic"],
-            priority=5
+            priority=6
         )
         prod_soundbar = Product(
             id=uuid.uuid4(),
@@ -391,7 +391,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="120W cinematic home theater soundbar with wireless subwoofer, HDMI eARC, Optical, AUX, and Bluetooth 5.3 3D surround sound.",
             specifications={"Output Power": "120W RMS (60W Bar + 60W Subwoofer)", "Inputs": "HDMI eARC, Optical, AUX, Bluetooth, USB", "Modes": "Movie, Music, News, 3D Surround"},
             tags=["soundbar", "speaker", "home theater", "bass", "audio"],
-            priority=4
+            priority=7
         )
         prod_powerbank = Product(
             id=uuid.uuid4(),
@@ -408,7 +408,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="Ultra-fast 65W Power Delivery laptop and phone power bank with digital LED battery percentage display and aircraft safety approval.",
             specifications={"Capacity": "20,000mAh (74Wh)", "Max Output": "65W PD / PPS / QC 3.0", "Ports": "2x USB-C + 1x USB-A", "Weight": "380g"},
             tags=["power bank", "charger", "fast charging", "battery", "laptop"],
-            priority=4
+            priority=8
         )
         prod_oxford = Product(
             id=uuid.uuid4(),
@@ -425,7 +425,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="Full-grain imported cow leather Oxford formal dress shoes with padded orthopedic memory foam insole and anti-slip rubber outsole.",
             specifications={"Upper Material": "100% Genuine Full-Grain Cow Leather", "Sole": "Durable Anti-Slip Rubber", "Sizes": "40, 41, 42, 43, 44", "Color": "Burnished Tan / Jet Black"},
             tags=["shoes", "oxford", "leather", "formal", "men", "footwear"],
-            priority=3
+            priority=9
         )
         prod_sneakers = Product(
             id=uuid.uuid4(),
@@ -442,7 +442,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="Ultra-lightweight mesh knit running sneakers with responsive air-cushioned midsole for gym, sports, and daily walking comfort.",
             specifications={"Upper": "Flyknit Breathable Mesh", "Midsole": "High-Rebound EVA Air Cushion", "Sizes": "39, 40, 41, 42, 43, 44", "Weight": "240g per shoe"},
             tags=["sneakers", "running", "sports", "shoes", "gym", "footwear"],
-            priority=3
+            priority=10
         )
         prod_backpack = Product(
             id=uuid.uuid4(),
@@ -459,7 +459,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="High-density water-resistant Oxford nylon backpack with hidden zipper pockets, external USB charging port, and 180° flat opening luggage strap.",
             specifications={"Laptop Compartment": "Fits up to 15.6 inch laptops", "Capacity": "28 Liters", "Material": "Waterproof 900D Oxford Fabric", "Features": "Anti-theft lock, USB Port"},
             tags=["backpack", "bag", "laptop bag", "waterproof", "office"],
-            priority=2
+            priority=11
         )
         prod_diffuser = Product(
             id=uuid.uuid4(),
@@ -476,7 +476,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="Whisper-quiet 500ml ultrasonic cool mist humidifier and aroma diffuser with 7-color soothing LED mood lights and auto-shutoff timer.",
             specifications={"Capacity": "500ml Water Tank", "Timer": "1h / 3h / 6h / Continuous", "Lighting": "7-Color Ambient LED", "Coverage": "Up to 300 sq. ft."},
             tags=["diffuser", "aroma", "humidifier", "home", "relaxation"],
-            priority=2
+            priority=12
         )
         prod_flask = Product(
             id=uuid.uuid4(),
@@ -493,7 +493,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="Food-grade 304 stainless steel thermal bottle keeping beverages hot for 18 hours or ice-cold for 24 hours with leak-proof cap.",
             specifications={"Capacity": "1000ml (1 Liter)", "Material": "18/8 Pro-Grade Stainless Steel", "Performance": "18h Hot / 24h Cold", "BPA Free": "Yes"},
             tags=["flask", "bottle", "thermal", "water bottle", "travel"],
-            priority=1
+            priority=13
         )
         prod_wallet = Product(
             id=uuid.uuid4(),
@@ -510,7 +510,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="Handmade oil-wax cowhide bi-fold wallet featuring 8 card slots, 2 currency compartments, and military-grade RFID blocking protection.",
             specifications={"Material": "100% Full-Grain Cowhide Leather", "Protection": "RFID Blocking 13.56 MHz", "Card Capacity": "Up to 10 Cards", "Color": "Vintage Brown"},
             tags=["wallet", "leather", "rfid", "accessories", "men"],
-            priority=1
+            priority=14
         )
         prod_keyboard = Product(
             id=uuid.uuid4(),
@@ -527,7 +527,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="Compact 75% hot-swappable mechanical keyboard with pre-lubed tactile switches, per-key RGB backlighting, and braided Type-C cable.",
             specifications={"Switches": "Hot-Swappable Blue / Brown Switches", "Layout": "75% ANSI (84 Keys)", "Backlight": "16.8M Color RGB (18 Modes)", "Keycaps": "Double-Shot PBT"},
             tags=["keyboard", "mechanical", "gaming", "rgb", "pc"],
-            priority=1
+            priority=15
         )
 
         padma_products = [
@@ -1064,7 +1064,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="Premium Korean breathable mesh ergonomic executive chair with 3D adjustable armrests, adaptive lumbar support, and 135-degree recline.",
             specifications={"Material": "Korean Breathable Mesh", "Mechanism": "Synchronized Multi-Lock Tilt", "Weight Capacity": "150 KG", "Warranty": "2 Years Manufacturer"},
             tags=["chair", "office", "ergonomic", "mesh", "furniture"],
-            priority=10
+            priority=1
         )
         prod_hz_stand = Product(
             id=uuid.uuid4(),
@@ -1081,7 +1081,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="Heavy-duty aircraft-grade aluminum dual monitor arm holding two 17\" to 32\" displays with full 360-degree rotation and integrated cable management.",
             specifications={"VESA Compatibility": "75x75mm, 100x100mm", "Screen Sizes": "17\" - 32\" per arm", "Weight Limit": "9 KG per arm"},
             tags=["monitor arm", "desk setup", "dual monitor", "accessories"],
-            priority=9
+            priority=2
         )
         prod_hz_dripper = Product(
             id=uuid.uuid4(),
@@ -1098,7 +1098,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="Handcrafted ceramic V60 pour-over coffee brewer set with 600ml borosilicate glass server and heat-resistant wooden collar.",
             specifications={"Material": "Ceramic + Borosilicate Heatproof Glass", "Capacity": "600ml (1-4 Cups)", "Color": "Matte Charcoal Black"},
             tags=["coffee", "dripper", "lifestyle", "ceramic", "kitchen"],
-            priority=8
+            priority=3
         )
         prod_hz_mouse = Product(
             id=uuid.uuid4(),
@@ -1115,7 +1115,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             description="57-degree natural handshake posture wireless ergonomic mouse with silent optical clicks, dual Bluetooth 5.0 + 2.4GHz USB receiver, and rechargeable battery.",
             specifications={"Connectivity": "Bluetooth 5.0 + 2.4G Wireless", "DPI Levels": "800 / 1200 / 1600 / 2400 DPI", "Battery": "500mAh Rechargeable (3 Months)"},
             tags=["mouse", "ergonomic", "wireless", "office", "electronics"],
-            priority=7
+            priority=4
         )
         db.add_all([prod_hz_chair, prod_hz_stand, prod_hz_dripper, prod_hz_mouse])
         await db.flush()
