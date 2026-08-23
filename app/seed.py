@@ -42,7 +42,7 @@ async def seed_database():
 
         # 1. Clean existing demo data if present (Idempotent seed)
         demo_slugs = [
-            "padma-mart", "horizon-retail", "padma-digital-solutions", "acme-digital-solutions", 
+            "padma-mart", "apex-erp-cloud", "horizon-retail", "padma-digital-solutions", "acme-digital-solutions", 
             "daraz-seller-bd", "aarong-lifestyle", "chaldal-quick", "pickaboo-gadgets", "rokomari-books"
         ]
         for s in demo_slugs:
@@ -55,7 +55,8 @@ async def seed_database():
 
         # Also clean super admin user and demo client users if already exists for idempotent run
         await db.execute(delete(User).where(User.email.in_([
-            "admin@gmail.com", "client@gmail.com", "client2@gmail.com",
+            "admin@gmail.com", "ecommerceclient1@gmail.com", "erpclient1@gmail.com", "ecommerceclient2@gmail.com",
+            "client@gmail.com", "client2@gmail.com",
             "superadmin@enterprise.example", "superadmin@padmaai.example", 
             "owner@padmadigital.example", "owner@padmaai.example"
         ])))
@@ -158,9 +159,9 @@ async def seed_database():
         db.add(super_admin_user)
         seeded_users["admin@gmail.com"] = super_admin_user
 
-        # 4b. Padma Mart Organization Owner (Demo Client) & Specialized E-Commerce Staff
+        # 4b. Padma Mart Organization Owner (E-Commerce Client 1) & Specialized Staff
         padma_users_data = [
-            ("client@gmail.com", "Demo Client", UserRole.TENANT_OWNER, "Executive"),
+            ("ecommerceclient1@gmail.com", "E-Commerce Client 1 (Padma Mart)", UserRole.TENANT_OWNER, "Executive"),
             ("nusrat.support@padmadigital.example", "Nusrat Jahan", UserRole.SUPPORT_AGENT, "Customer Support & Orders"),
             ("ariful.sales@padmadigital.example", "Ariful Islam", UserRole.SALES_AGENT, "Sales & Styling Advisor"),
             ("mahmud.tech@padmadigital.example", "Mahmudul Hasan", UserRole.SUPPORT_AGENT, "Payment & Gateway Support"),
@@ -897,8 +898,80 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
         ]
         db.add_all(msgs_3)
 
-        # 10. Seed Additional E-Commerce SaaS Tenants for Super Admin & Multi-Tenant Testing
-        # Tenant 2: Horizon Retail Ltd. (Demo Client 2 - client2@gmail.com for Strict Multi-Tenant Product Isolation Testing)
+        # 10. Seed Additional E-Commerce & ERP SaaS Tenants
+        # Tenant 2: Apex Enterprise Solutions (ERP Client 1 - erpclient1@gmail.com for B2B / ERP Testing)
+        t_apex = Tenant(
+            id=uuid.uuid4(),
+            name="Apex Enterprise Solutions",
+            slug="apex-erp-cloud",
+            business_category="erp",
+            custom_domain="cloud.apexerp.example",
+            whitelabel_enabled=True,
+            branding_config={
+                "brand_name": "Apex Cloud AI",
+                "tagline": "Enterprise Resource Planning & B2B Solutions",
+                "primary_color": "#0284C7"
+            },
+            enabled_modules={
+                "dashboard": True, "inbox": True, "contacts": True,
+                "products": False, "orders": False, "knowledge": True,
+                "websites": True, "analytics": True, "usage": True,
+                "team": True, "settings": True, "subscription": True
+            }
+        )
+        db.add(t_apex)
+        await db.flush()
+
+        sub_apex = Subscription(
+            tenant_id=t_apex.id,
+            tier=SubscriptionTier.ENTERPRISE,
+            status=SubscriptionStatus.ACTIVE,
+            monthly_token_limit=10_000_000,
+            monthly_conversation_limit=50_000,
+            max_agents=20,
+            max_websites=5,
+            current_period_start=utc_now() - timedelta(days=7),
+            current_period_end=utc_now() + timedelta(days=23)
+        )
+        db.add(sub_apex)
+
+        u_apex = User(
+            tenant_id=t_apex.id,
+            email="erpclient1@gmail.com",
+            hashed_password=get_password_hash("12345678"),
+            full_name="ERP Client 1 (Apex Cloud)",
+            role=UserRole.TENANT_OWNER,
+            department="Executive",
+            is_active=True
+        )
+        db.add(u_apex)
+
+        asst_apex = AIAssistant(
+            tenant_id=t_apex.id,
+            name="Apex Enterprise Operations Bot",
+            personality_type="technical",
+            model_name="gemini-1.5-pro",
+            system_instruction="You are Apex Enterprise Cloud's ERP specialist assistant. Assist corporate clients with billing, ledger synchronization, employee access, and supply chain ERP inquiries.",
+            fallback_message="Connecting you with an Apex Enterprise ERP solution architect."
+        )
+        db.add(asst_apex)
+        await db.flush()
+
+        site_apex = Website(
+            tenant_id=t_apex.id,
+            assistant_id=asst_apex.id,
+            name="Apex Cloud Portal",
+            domain="portal.apexerp.example",
+            widget_key=f"wg_erp_{uuid.uuid4().hex[:12]}",
+            primary_color="#0284C7",
+            header_title="Apex ERP Enterprise Support",
+            welcome_message="Welcome to Apex ERP Cloud. How can we support your enterprise workflows today?",
+            is_active=True
+        )
+        db.add(site_apex)
+        await db.flush()
+
+        # Tenant 3: Horizon Retail Ltd. (E-Commerce Client 2 - ecommerceclient2@gmail.com for Multi-Tenant Isolation)
         t_horizon = Tenant(
             id=uuid.uuid4(),
             name="Horizon Retail Ltd.",
@@ -941,9 +1014,9 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
 
         u_horizon = User(
             tenant_id=t_horizon.id,
-            email="client2@gmail.com",
+            email="ecommerceclient2@gmail.com",
             hashed_password=get_password_hash("12345678"),
-            full_name="Demo Client 2",
+            full_name="E-Commerce Client 2 (Horizon Store)",
             role=UserRole.TENANT_OWNER,
             department="Executive",
             is_active=True
