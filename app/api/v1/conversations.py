@@ -22,7 +22,7 @@ from app.schemas.schemas import (
     ProductOut, OrderOut, PublicWidgetOrderCreate, OrderCreate, OrderItemIn,
     SwitchOrderCOD, RetryBkashPayment
 )
-from app.services.ai.gemini import GeminiService, gemini_service, COMMERCE_TOOLS
+from app.services.ai.gemini import GeminiService, gemini_service, COMMERCE_TOOLS, ERP_TOOLS
 from app.services.ai.safety_rules import AISafetyAndRulesEngine
 from app.services.rag.rag_service import RAGService
 from app.services.realtime.connection_manager import manager
@@ -463,6 +463,10 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
             safety_settings=assistant.safety_settings
         )
 
+        # Choose adaptive tools based on tenant archetype (E-Commerce vs ERP)
+        tenant_cat = (tenant.business_category or "ecommerce").lower() if tenant else "ecommerce"
+        active_tools = ERP_TOOLS if tenant_cat in ["erp", "services"] else COMMERCE_TOOLS
+
         try:
             ai_res = await gemini.generate_chat_response(
                 system_instruction=rendered_system_prompt,
@@ -472,7 +476,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 model=assistant.model_name,
                 temperature=assistant.temperature,
                 max_output_tokens=assistant.max_output_tokens,
-                tools=COMMERCE_TOOLS
+                tools=active_tools
             )
             raw_ai_text = ai_res.get("text", "")
             tool_calls = ai_res.get("tool_calls", [])
@@ -500,7 +504,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                     visitor_phone=conv_phone
                 )
 
-            # 3. If model returned empty text or generic greeting, synthesize a concise, helpful shopping response
+            # 3. If model returned empty text or generic greeting, synthesize a concise, helpful response
             if ui_component:
                 comp_type = ui_component.get("type")
                 if comp_type == "product_card":
@@ -517,6 +521,14 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                     o_info = ui_component.get("data", {}).get("order", {})
                     if not raw_ai_text or raw_ai_text == "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?":
                         raw_ai_text = f"আপনার অর্ডার {o_info.get('order_number')}-এর লাইভ ট্র্যাকিং স্ট্যাটাস নিচে দেওয়া হলো।"
+                elif comp_type == "ticket_card":
+                    t_info = ui_component.get("data", {})
+                    if not raw_ai_text or raw_ai_text == "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?":
+                        raw_ai_text = f"আপনার অনুরোধ অনুযায়ী এন্টারপ্রাইজ সাপোর্ট টিকেট #{t_info.get('ticket_id')} তৈরি করা হয়েছে। আমাদের টেকনিক্যাল টিম {t_info.get('sla_response_time', '15 mins')}-এর মধ্যে রেসপন্স করবে।"
+                elif comp_type == "meeting_card":
+                    m_info = ui_component.get("data", {})
+                    if not raw_ai_text or raw_ai_text == "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?":
+                        raw_ai_text = f"আপনার লাইভ ডেমো ও কনসালটেশন শিডিউল করা হয়েছে ({m_info.get('preferred_date', 'Tomorrow 3:00 PM')})। নিচে মিটিং লিংক দেওয়া হলো।"
 
             # Process AI Guardrail & Multi-Strike Auto-Pause Policy via AISafetyAndRulesEngine
             ai_reply_text = raw_ai_text or "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?"

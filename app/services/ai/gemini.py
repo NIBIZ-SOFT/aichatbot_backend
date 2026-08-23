@@ -62,6 +62,56 @@ COMMERCE_TOOLS = [
     }
 ]
 
+ERP_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "create_support_ticket",
+            "description": "Call this tool to generate an official enterprise SLA support ticket when a corporate client reports a technical issue, billing/ledger discrepancy, ERP bug, or requests staff assistance.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "subject": {
+                        "type": "string",
+                        "description": "Short summary of the operational issue (e.g. 'Bank Reconciliation Sync Failed', 'Payroll Tax Deduction Error')"
+                    },
+                    "priority": {
+                        "type": "string",
+                        "enum": ["Critical", "High", "Medium", "Low"],
+                        "description": "Priority level based on business impact. Defaults to High."
+                    },
+                    "department": {
+                        "type": "string",
+                        "description": "Department responsible (e.g. 'Financial Accounting', 'HRM & Payroll', 'Technical Operations', 'Database Archiving')"
+                    }
+                },
+                "required": ["subject"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "schedule_meeting",
+            "description": "Call this tool to book an executive consultation or live ERP solution demo when a prospect or client requests a live demo, consultation, or meeting.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Topic or module to demonstrate (e.g. 'Apex Supply Chain & Multi-Warehouse Demo', 'Custom ERP Pricing Consultation')"
+                    },
+                    "date": {
+                        "type": "string",
+                        "description": "Preferred date or time slot requested by the visitor."
+                    }
+                },
+                "required": ["topic"]
+            }
+        }
+    }
+]
+
 
 class GeminiService:
     """
