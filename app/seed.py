@@ -950,8 +950,15 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             tenant_id=t_apex.id,
             name="Apex Enterprise Operations Bot",
             personality_type="technical",
-            model_name="gemini-1.5-pro",
-            system_instruction="You are Apex Enterprise Cloud's ERP specialist assistant. Assist corporate clients with billing, ledger synchronization, employee access, and supply chain ERP inquiries.",
+            model_name="gemini-1.5-flash",
+            system_instruction=(
+                "You are Apex Enterprise Cloud's Senior ERP Solution Architect & Corporate Support AI. "
+                "Assist enterprise clients with Financial Accounting, Supply Chain & Inventory, HRM/Payroll, "
+                "Manufacturing, NBR Mushak 6.3 VAT compliance, and cloud deployment. "
+                "When a visitor requests a technical support ticket or reports an operational issue, call the create_support_ticket tool. "
+                "When a visitor requests a live consultation or demo, call the schedule_meeting tool. "
+                "Answer concisely, professionally, and quote relevant BDT pricing or SLA metrics based on verified knowledge."
+            ),
             fallback_message="Connecting you with an Apex Enterprise ERP solution architect."
         )
         db.add(asst_apex)
@@ -962,14 +969,126 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             assistant_id=asst_apex.id,
             name="Apex Cloud Portal",
             domain="portal.apexerp.example",
-            widget_key=f"wg_erp_{uuid.uuid4().hex[:12]}",
+            widget_key="wg_erp_apex_demo",
             primary_color="#0284C7",
             header_title="Apex ERP Enterprise Support",
-            welcome_message="Welcome to Apex ERP Cloud. How can we support your enterprise workflows today?",
+            welcome_message="Welcome to Apex ERP Cloud. How can we assist your enterprise operations and workflows today?",
             is_active=True
         )
         db.add(site_apex)
         await db.flush()
+
+        # Seed Rich Enterprise Knowledge Base for Apex ERP Cloud
+        kb_erp_core = KnowledgeBase(
+            tenant_id=t_apex.id,
+            title="Apex Cloud ERP Suite — Core Modules & Architecture",
+            description="Comprehensive overview of Financial Accounting, Supply Chain, HRM, and Manufacturing modules.",
+            category="Modules & Features",
+            source_type="document",
+            chunk_count=4,
+            status="indexed"
+        )
+        db.add(kb_erp_core)
+        await db.flush()
+
+        chunks_erp_core = [
+            KnowledgeChunk(
+                tenant_id=t_apex.id,
+                knowledge_base_id=kb_erp_core.id,
+                chunk_index=0,
+                content="Apex Financial Accounting & General Ledger: Multi-currency general ledger, real-time trial balance, profit/loss statement, balance sheet, automated bank reconciliation, and NBR Mushak 6.3 compliant e-VAT calculation with digital invoice signing.",
+                metadata_json={"doc_title": kb_erp_core.title, "category": "Finance", "tokens": 46}
+            ),
+            KnowledgeChunk(
+                tenant_id=t_apex.id,
+                knowledge_base_id=kb_erp_core.id,
+                chunk_index=1,
+                content="Apex Supply Chain & Multi-Warehouse Management: Real-time multi-location inventory tracking, automated Reorder Point (ROP) alerts, barcode/QR batch tracking, vendor purchase order approval workflows, and delivery dispatch integration.",
+                metadata_json={"doc_title": kb_erp_core.title, "category": "Supply Chain", "tokens": 44}
+            ),
+            KnowledgeChunk(
+                tenant_id=t_apex.id,
+                knowledge_base_id=kb_erp_core.id,
+                chunk_index=2,
+                content="Apex HRM, Biometric Attendance & Payroll: Automated biometric attendance machine sync, shift management, leave approvals, income tax deduction (Bangladesh NBR slabs), provident fund (PF), gratuity, and 1-click bank salary disbursement file generation.",
+                metadata_json={"doc_title": kb_erp_core.title, "category": "HRM", "tokens": 48}
+            ),
+            KnowledgeChunk(
+                tenant_id=t_apex.id,
+                knowledge_base_id=kb_erp_core.id,
+                chunk_index=3,
+                content="Apex Production & Manufacturing Work Orders: Multi-level Bill of Materials (BOM), shop floor machine scheduling, work order tracking, raw material yield calculation, wastage control, and ISO standard Quality Control (QC) inspection checkpoints.",
+                metadata_json={"doc_title": kb_erp_core.title, "category": "Manufacturing", "tokens": 46}
+            )
+        ]
+        db.add_all(chunks_erp_core)
+
+        kb_erp_pricing = KnowledgeBase(
+            tenant_id=t_apex.id,
+            title="Apex Cloud ERP — Pricing, Deployment & User Licensing",
+            description="Cloud SaaS vs On-Premise pricing tiers in BDT (৳), implementation timeline, and data migration.",
+            category="Pricing & Licensing",
+            source_type="document",
+            chunk_count=3,
+            status="indexed"
+        )
+        db.add(kb_erp_pricing)
+        await db.flush()
+
+        chunks_erp_pricing = [
+            KnowledgeChunk(
+                tenant_id=t_apex.id,
+                knowledge_base_id=kb_erp_pricing.id,
+                chunk_index=0,
+                content="Apex ERP Pricing Plans in Bangladesh: Starter Plan (Up to 10 Users): ৳15,000 BDT/month (Core Finance & Inventory). Growth Plan (Up to 50 Users): ৳35,000 BDT/month (Full Suite with HRM & CRM). Enterprise Unlimited: Custom quote starting at ৳85,000 BDT/month with dedicated cloud instance.",
+                metadata_json={"doc_title": kb_erp_pricing.title, "category": "Pricing", "tokens": 52}
+            ),
+            KnowledgeChunk(
+                tenant_id=t_apex.id,
+                knowledge_base_id=kb_erp_pricing.id,
+                chunk_index=1,
+                content="Deployment Options: 1. Cloud SaaS: Hosted on Tier-4 high-security local Bangladesh datacenter (BDIX enabled) with 99.99% uptime SLA. 2. Private Dedicated Cloud (AWS / Azure). 3. On-Premise Enterprise: Deployed behind company firewall with local hardware configuration.",
+                metadata_json={"doc_title": kb_erp_pricing.title, "category": "Deployment", "tokens": 48}
+            ),
+            KnowledgeChunk(
+                tenant_id=t_apex.id,
+                knowledge_base_id=kb_erp_pricing.id,
+                chunk_index=2,
+                content="Implementation & Onboarding Timeline: Standard deployment takes 2 to 4 weeks, including legacy data migration (from Tally, QuickBooks, or Excel), custom chart of accounts setup, user role permissions, and on-site staff training.",
+                metadata_json={"doc_title": kb_erp_pricing.title, "category": "Implementation", "tokens": 42}
+            )
+        ]
+        db.add_all(chunks_erp_pricing)
+
+        kb_erp_support = KnowledgeBase(
+            tenant_id=t_apex.id,
+            title="Enterprise SLA Support, Ticketing & Live Demo Protocol",
+            description="24/7 technical support response times, SLA escalation tiers, and booking live solution demos.",
+            category="SLA & Support",
+            source_type="document",
+            chunk_count=2,
+            status="indexed"
+        )
+        db.add(kb_erp_support)
+        await db.flush()
+
+        chunks_erp_support = [
+            KnowledgeChunk(
+                tenant_id=t_apex.id,
+                knowledge_base_id=kb_erp_support.id,
+                chunk_index=0,
+                content="Apex 24/7 Enterprise Support SLA: Critical Priority (System down/blocking operations): 15-minute guaranteed response time. High Priority (Ledger/Payroll discrepancy): 1-hour response time. Standard Support: 4-hour response time. Dedicated account manager provided for Enterprise tier.",
+                metadata_json={"doc_title": kb_erp_support.title, "category": "SLA", "tokens": 46}
+            ),
+            KnowledgeChunk(
+                tenant_id=t_apex.id,
+                knowledge_base_id=kb_erp_support.id,
+                chunk_index=1,
+                content="Booking a Live ERP Demo & Consultation: Corporate clients can book a 30-minute tailored video consultation (via Google Meet or Microsoft Teams) with an Apex Senior Solutions Architect. We demonstrate customized workflows with sample company data.",
+                metadata_json={"doc_title": kb_erp_support.title, "category": "Demo", "tokens": 44}
+            )
+        ]
+        db.add_all(chunks_erp_support)
 
         # Tenant 3: Horizon Retail Ltd. (E-Commerce Client 2 - ecommerceclient2@gmail.com for Multi-Tenant Isolation)
         t_horizon = Tenant(
