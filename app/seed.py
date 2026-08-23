@@ -42,7 +42,7 @@ async def seed_database():
 
         # 1. Clean existing demo data if present (Idempotent seed)
         demo_slugs = [
-            "padma-mart", "padma-digital-solutions", "acme-digital-solutions", 
+            "padma-mart", "horizon-retail", "padma-digital-solutions", "acme-digital-solutions", 
             "daraz-seller-bd", "aarong-lifestyle", "chaldal-quick", "pickaboo-gadgets", "rokomari-books"
         ]
         for s in demo_slugs:
@@ -55,7 +55,7 @@ async def seed_database():
 
         # Also clean super admin user and demo client users if already exists for idempotent run
         await db.execute(delete(User).where(User.email.in_([
-            "admin@gmail.com", "client@gmail.com",
+            "admin@gmail.com", "client@gmail.com", "client2@gmail.com",
             "superadmin@enterprise.example", "superadmin@padmaai.example", 
             "owner@padmadigital.example", "owner@padmaai.example"
         ])))
@@ -272,7 +272,7 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
         db.add_all([site_main, site_fashion, site_gadgets])
         await db.flush()
 
-        # 6b. Seed Products into Products Module
+        # 6b. Seed Products into Products Module (Padma Mart - client@gmail.com)
         prod_panjabi = Product(
             id=uuid.uuid4(),
             tenant_id=tenant.id,
@@ -286,7 +286,9 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             stock_status="in_stock",
             images=["https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600&auto=format&fit=crop&q=80"],
             description="100% Egyptian Cotton handcrafted Panjabi with intricate thread embroidery on collar and placket. Available in Royal Blue, Black, Maroon, and White.",
-            specifications={"Material": "100% Egyptian Cotton", "Sizes": "M (38), L (40), XL (42), XXL (44)", "Fit": "Slim Fit & Regular Fit", "Occasion": "Eid / Festive"}
+            specifications={"Material": "100% Egyptian Cotton", "Sizes": "M (38), L (40), XL (42), XXL (44)", "Fit": "Slim Fit & Regular Fit", "Occasion": "Eid / Festive"},
+            tags=["eid", "festive", "cotton", "men", "panjabi"],
+            priority=10
         )
         prod_earbuds = Product(
             id=uuid.uuid4(),
@@ -301,7 +303,9 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             stock_status="in_stock",
             images=["https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=600&auto=format&fit=crop&q=80"],
             description="High-fidelity audio with 35dB Active Noise Cancellation, Bluetooth 5.3, 40-hour total battery life with wireless charging case.",
-            specifications={"Battery Life": "8h earbuds + 32h case", "ANC": "35dB Active Noise Cancellation", "Water Resistance": "IPX5", "Warranty": "6 Months Official"}
+            specifications={"Battery Life": "8h earbuds + 32h case", "ANC": "35dB Active Noise Cancellation", "Water Resistance": "IPX5", "Warranty": "6 Months Official"},
+            tags=["earbuds", "anc", "wireless", "audio", "bluetooth"],
+            priority=9
         )
         prod_smartwatch = Product(
             id=uuid.uuid4(),
@@ -316,9 +320,221 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             stock_status="in_stock",
             images=["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80"],
             description="1.96-inch AMOLED always-on display, Bluetooth calling with noise reduction mic, 24/7 Heart rate & SpO2 monitoring, and 100+ sports modes.",
-            specifications={"Display": "1.96-inch AMOLED (410x502)", "Battery": "7-day battery life", "Straps": "Includes 2 straps (Silicone & Leather)", "Waterproof": "IP68"}
+            specifications={"Display": "1.96-inch AMOLED (410x502)", "Battery": "7-day battery life", "Straps": "Includes 2 straps (Silicone & Leather)", "Waterproof": "IP68"},
+            tags=["smartwatch", "amoled", "calling", "fitness", "watch"],
+            priority=8
         )
-        db.add_all([prod_panjabi, prod_earbuds, prod_smartwatch])
+        prod_saree = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Handloom Pure Dhakai Jamdani Saree",
+            slug="handloom-pure-dhakai-jamdani-saree",
+            category="Fashion",
+            sku="SKU-SAREE-04",
+            unit_price=8200.0,
+            selling_price=6500.0,
+            stock_quantity=20,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600&auto=format&fit=crop&q=80"],
+            description="Traditional 84-count cotton silk hand-woven Dhakai Jamdani saree with fine golden zari floral motifs, perfect for weddings and cultural festivals.",
+            specifications={"Fabric": "Pure Cotton Silk", "Length": "12 Haat with Blouse Piece", "Craft": "Handloom Weave", "Color": "Crimson Red with Golden Zari"},
+            tags=["saree", "jamdani", "dhakai", "women", "traditional", "wedding"],
+            priority=7
+        )
+        prod_polo = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Men's Classic Slim-Fit Polo T-Shirt",
+            slug="mens-classic-slim-fit-polo-t-shirt",
+            category="Fashion",
+            sku="SKU-POLO-05",
+            unit_price=1450.0,
+            selling_price=1150.0,
+            stock_quantity=110,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1581655353564-df123a1eb820?w=600&auto=format&fit=crop&q=80"],
+            description="220 GSM breathable pique cotton polo shirt with ribbed collar, horn buttons, and anti-shrink enzyme wash finish.",
+            specifications={"Fabric": "100% Pique Cotton (220 GSM)", "Sizes": "S, M, L, XL, XXL", "Colors": "Navy Blue, Olive Green, Charcoal, White"},
+            tags=["polo", "t-shirt", "casual", "men", "summer"],
+            priority=6
+        )
+        prod_kurti = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Embroidered Georgette Designer Kurti",
+            slug="embroidered-georgette-designer-kurti",
+            category="Fashion",
+            sku="SKU-KURTI-06",
+            unit_price=3500.0,
+            selling_price=2850.0,
+            stock_quantity=45,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1583391733975-0245a4943f21?w=600&auto=format&fit=crop&q=80"],
+            description="Contemporary flared A-line georgette kurti with intricate Kashmiri neckline thread embroidery and inner santoon lining.",
+            specifications={"Fabric": "Pure Georgette with Lining", "Sizes": "38 (M), 40 (L), 42 (XL), 44 (XXL)", "Work": "Kashmiri Thread Embroidery"},
+            tags=["kurti", "women", "georgette", "designer", "ethnic"],
+            priority=5
+        )
+        prod_soundbar = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Padma BassBoom 120W Bluetooth Soundbar",
+            slug="padma-bassboom-120w-bluetooth-soundbar",
+            category="Electronics",
+            sku="SKU-AUDIO-07",
+            unit_price=9990.0,
+            selling_price=7990.0,
+            stock_quantity=18,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1545454675-3531b543be5d?w=600&auto=format&fit=crop&q=80"],
+            description="120W cinematic home theater soundbar with wireless subwoofer, HDMI eARC, Optical, AUX, and Bluetooth 5.3 3D surround sound.",
+            specifications={"Output Power": "120W RMS (60W Bar + 60W Subwoofer)", "Inputs": "HDMI eARC, Optical, AUX, Bluetooth, USB", "Modes": "Movie, Music, News, 3D Surround"},
+            tags=["soundbar", "speaker", "home theater", "bass", "audio"],
+            priority=4
+        )
+        prod_powerbank = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Padma TurboCharge 20000mAh 65W Power Bank",
+            slug="padma-turbocharge-20000mah-65w-power-bank",
+            category="Electronics",
+            sku="SKU-PWR-08",
+            unit_price=2800.0,
+            selling_price=2200.0,
+            stock_quantity=50,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1609592424300-349f285f502d?w=600&auto=format&fit=crop&q=80"],
+            description="Ultra-fast 65W Power Delivery laptop and phone power bank with digital LED battery percentage display and aircraft safety approval.",
+            specifications={"Capacity": "20,000mAh (74Wh)", "Max Output": "65W PD / PPS / QC 3.0", "Ports": "2x USB-C + 1x USB-A", "Weight": "380g"},
+            tags=["power bank", "charger", "fast charging", "battery", "laptop"],
+            priority=4
+        )
+        prod_oxford = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Handcrafted Genuine Leather Oxford Shoes",
+            slug="handcrafted-genuine-leather-oxford-shoes",
+            category="Footwear",
+            sku="SKU-SHOE-09",
+            unit_price=5200.0,
+            selling_price=4200.0,
+            stock_quantity=35,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=600&auto=format&fit=crop&q=80"],
+            description="Full-grain imported cow leather Oxford formal dress shoes with padded orthopedic memory foam insole and anti-slip rubber outsole.",
+            specifications={"Upper Material": "100% Genuine Full-Grain Cow Leather", "Sole": "Durable Anti-Slip Rubber", "Sizes": "40, 41, 42, 43, 44", "Color": "Burnished Tan / Jet Black"},
+            tags=["shoes", "oxford", "leather", "formal", "men", "footwear"],
+            priority=3
+        )
+        prod_sneakers = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Padma AirFlex Breathable Running Sneakers",
+            slug="padma-airflex-breathable-running-sneakers",
+            category="Footwear",
+            sku="SKU-SHOE-10",
+            unit_price=3200.0,
+            selling_price=2650.0,
+            stock_quantity=60,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80"],
+            description="Ultra-lightweight mesh knit running sneakers with responsive air-cushioned midsole for gym, sports, and daily walking comfort.",
+            specifications={"Upper": "Flyknit Breathable Mesh", "Midsole": "High-Rebound EVA Air Cushion", "Sizes": "39, 40, 41, 42, 43, 44", "Weight": "240g per shoe"},
+            tags=["sneakers", "running", "sports", "shoes", "gym", "footwear"],
+            priority=3
+        )
+        prod_backpack = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Waterproof Anti-Theft 15.6\" Laptop Backpack",
+            slug="waterproof-anti-theft-15-6-laptop-backpack",
+            category="Bags",
+            sku="SKU-BAG-11",
+            unit_price=2400.0,
+            selling_price=1850.0,
+            stock_quantity=75,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&auto=format&fit=crop&q=80"],
+            description="High-density water-resistant Oxford nylon backpack with hidden zipper pockets, external USB charging port, and 180° flat opening luggage strap.",
+            specifications={"Laptop Compartment": "Fits up to 15.6 inch laptops", "Capacity": "28 Liters", "Material": "Waterproof 900D Oxford Fabric", "Features": "Anti-theft lock, USB Port"},
+            tags=["backpack", "bag", "laptop bag", "waterproof", "office"],
+            priority=2
+        )
+        prod_diffuser = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Aroma Ultrasonic Essential Oil Diffuser (500ml)",
+            slug="aroma-ultrasonic-essential-oil-diffuser-500ml",
+            category="Home",
+            sku="SKU-HOME-12",
+            unit_price=1950.0,
+            selling_price=1450.0,
+            stock_quantity=50,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=600&auto=format&fit=crop&q=80"],
+            description="Whisper-quiet 500ml ultrasonic cool mist humidifier and aroma diffuser with 7-color soothing LED mood lights and auto-shutoff timer.",
+            specifications={"Capacity": "500ml Water Tank", "Timer": "1h / 3h / 6h / Continuous", "Lighting": "7-Color Ambient LED", "Coverage": "Up to 300 sq. ft."},
+            tags=["diffuser", "aroma", "humidifier", "home", "relaxation"],
+            priority=2
+        )
+        prod_flask = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Double-Wall Vacuum Insulated Thermal Flask (1L)",
+            slug="double-wall-vacuum-insulated-thermal-flask-1l",
+            category="Home",
+            sku="SKU-HOME-13",
+            unit_price=1750.0,
+            selling_price=1350.0,
+            stock_quantity=40,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=600&auto=format&fit=crop&q=80"],
+            description="Food-grade 304 stainless steel thermal bottle keeping beverages hot for 18 hours or ice-cold for 24 hours with leak-proof cap.",
+            specifications={"Capacity": "1000ml (1 Liter)", "Material": "18/8 Pro-Grade Stainless Steel", "Performance": "18h Hot / 24h Cold", "BPA Free": "Yes"},
+            tags=["flask", "bottle", "thermal", "water bottle", "travel"],
+            priority=1
+        )
+        prod_wallet = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Premium Full-Grain RFID Leather Wallet",
+            slug="premium-full-grain-rfid-leather-wallet",
+            category="Accessories",
+            sku="SKU-ACC-14",
+            unit_price=1950.0,
+            selling_price=1550.0,
+            stock_quantity=65,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1627123424574-724758594e93?w=600&auto=format&fit=crop&q=80"],
+            description="Handmade oil-wax cowhide bi-fold wallet featuring 8 card slots, 2 currency compartments, and military-grade RFID blocking protection.",
+            specifications={"Material": "100% Full-Grain Cowhide Leather", "Protection": "RFID Blocking 13.56 MHz", "Card Capacity": "Up to 10 Cards", "Color": "Vintage Brown"},
+            tags=["wallet", "leather", "rfid", "accessories", "men"],
+            priority=1
+        )
+        prod_keyboard = Product(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            title="Padma Mechanical RGB Gaming Keyboard",
+            slug="padma-mechanical-rgb-gaming-keyboard",
+            category="Electronics",
+            sku="SKU-TECH-15",
+            unit_price=4500.0,
+            selling_price=3650.0,
+            stock_quantity=28,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=600&auto=format&fit=crop&q=80"],
+            description="Compact 75% hot-swappable mechanical keyboard with pre-lubed tactile switches, per-key RGB backlighting, and braided Type-C cable.",
+            specifications={"Switches": "Hot-Swappable Blue / Brown Switches", "Layout": "75% ANSI (84 Keys)", "Backlight": "16.8M Color RGB (18 Modes)", "Keycaps": "Double-Shot PBT"},
+            tags=["keyboard", "mechanical", "gaming", "rgb", "pc"],
+            priority=1
+        )
+
+        padma_products = [
+            prod_panjabi, prod_earbuds, prod_smartwatch, prod_saree, prod_polo,
+            prod_kurti, prod_soundbar, prod_powerbank, prod_oxford, prod_sneakers,
+            prod_backpack, prod_diffuser, prod_flask, prod_wallet, prod_keyboard
+        ]
+        db.add_all(padma_products)
         await db.flush()
 
         # 6c. Seed Orders into Orders Module
@@ -681,8 +897,157 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
         ]
         db.add_all(msgs_3)
 
-        # 10. Seed Additional E-Commerce SaaS Tenants for Super Admin Platform View
-        # Tenant 2: Daraz Seller Hub BD (Enterprise Tier)
+        # 10. Seed Additional E-Commerce SaaS Tenants for Super Admin & Multi-Tenant Testing
+        # Tenant 2: Horizon Retail Ltd. (Demo Client 2 - client2@gmail.com for Strict Multi-Tenant Product Isolation Testing)
+        t_horizon = Tenant(
+            id=uuid.uuid4(),
+            name="Horizon Retail Ltd.",
+            slug="horizon-retail",
+            business_category="ecommerce",
+            custom_domain="shop.horizonretail.com.bd",
+            whitelabel_enabled=True,
+            branding_config={
+                "brand_name": "Horizon Smart Bot",
+                "tagline": "Modern Office Tech & Workspace Ergonomics",
+                "primary_color": "#059669"
+            },
+            enabled_modules={
+                "dashboard": True, "inbox": True, "contacts": True,
+                "products": True, "orders": True, "knowledge": True,
+                "websites": True, "analytics": True, "usage": True,
+                "team": True, "settings": True, "subscription": True
+            },
+            ecommerce_settings={
+                "cod_enabled": True,
+                "delivery_charge_inside_dhaka": 70.0,
+                "delivery_charge_outside_dhaka": 130.0
+            }
+        )
+        db.add(t_horizon)
+        await db.flush()
+
+        sub_horizon = Subscription(
+            tenant_id=t_horizon.id,
+            tier=SubscriptionTier.GROWTH,
+            status=SubscriptionStatus.ACTIVE,
+            monthly_token_limit=5_000_000,
+            monthly_conversation_limit=25_000,
+            max_agents=10,
+            max_websites=3,
+            current_period_start=utc_now() - timedelta(days=5),
+            current_period_end=utc_now() + timedelta(days=25)
+        )
+        db.add(sub_horizon)
+
+        u_horizon = User(
+            tenant_id=t_horizon.id,
+            email="client2@gmail.com",
+            hashed_password=get_password_hash("12345678"),
+            full_name="Demo Client 2",
+            role=UserRole.TENANT_OWNER,
+            department="Executive",
+            is_active=True
+        )
+        db.add(u_horizon)
+
+        asst_horizon = AIAssistant(
+            tenant_id=t_horizon.id,
+            name="Horizon Workspace Assistant",
+            personality_type="friendly",
+            model_name="gemini-1.5-flash",
+            system_instruction="You are Horizon Retail's smart assistant for ergonomics and office tech products in Bangladesh.",
+            fallback_message="Let me connect you with Horizon support team."
+        )
+        db.add(asst_horizon)
+        await db.flush()
+
+        site_horizon = Website(
+            tenant_id=t_horizon.id,
+            assistant_id=asst_horizon.id,
+            name="Horizon Office & Tech Store",
+            domain="horizonretail.com.bd",
+            widget_key=f"wg_horizon_{uuid.uuid4().hex[:12]}",
+            primary_color="#059669",
+            header_title="Horizon Tech Live Chat",
+            welcome_message="Welcome to Horizon Retail! Need ergonomic workspace setups or tech accessories?",
+            is_active=True
+        )
+        db.add(site_horizon)
+        await db.flush()
+
+        # Seed Distinct Products ONLY for client2@gmail.com (Horizon Retail)
+        prod_hz_chair = Product(
+            id=uuid.uuid4(),
+            tenant_id=t_horizon.id,
+            title="Horizon Ergonomic High-Back Mesh Chair",
+            slug="horizon-ergonomic-high-back-mesh-chair",
+            category="Office",
+            sku="SKU-HRZ-CHR-01",
+            unit_price=16500.0,
+            selling_price=13900.0,
+            stock_quantity=25,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1580481077195-731da96f7477?w=600&auto=format&fit=crop&q=80"],
+            description="Premium Korean breathable mesh ergonomic executive chair with 3D adjustable armrests, adaptive lumbar support, and 135-degree recline.",
+            specifications={"Material": "Korean Breathable Mesh", "Mechanism": "Synchronized Multi-Lock Tilt", "Weight Capacity": "150 KG", "Warranty": "2 Years Manufacturer"},
+            tags=["chair", "office", "ergonomic", "mesh", "furniture"],
+            priority=10
+        )
+        prod_hz_stand = Product(
+            id=uuid.uuid4(),
+            tenant_id=t_horizon.id,
+            title="Horizon Pro Dual-Monitor Aluminum Gas Spring Arm",
+            slug="horizon-pro-dual-monitor-aluminum-gas-spring-arm",
+            category="Office",
+            sku="SKU-HRZ-ARM-02",
+            unit_price=5200.0,
+            selling_price=4200.0,
+            stock_quantity=40,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=600&auto=format&fit=crop&q=80"],
+            description="Heavy-duty aircraft-grade aluminum dual monitor arm holding two 17\" to 32\" displays with full 360-degree rotation and integrated cable management.",
+            specifications={"VESA Compatibility": "75x75mm, 100x100mm", "Screen Sizes": "17\" - 32\" per arm", "Weight Limit": "9 KG per arm"},
+            tags=["monitor arm", "desk setup", "dual monitor", "accessories"],
+            priority=9
+        )
+        prod_hz_dripper = Product(
+            id=uuid.uuid4(),
+            tenant_id=t_horizon.id,
+            title="Horizon Minimalist Matte Black Pour-Over Dripper Set",
+            slug="horizon-minimalist-matte-black-pour-over-dripper-set",
+            category="Lifestyle",
+            sku="SKU-HRZ-DRP-03",
+            unit_price=2200.0,
+            selling_price=1750.0,
+            stock_quantity=30,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=600&auto=format&fit=crop&q=80"],
+            description="Handcrafted ceramic V60 pour-over coffee brewer set with 600ml borosilicate glass server and heat-resistant wooden collar.",
+            specifications={"Material": "Ceramic + Borosilicate Heatproof Glass", "Capacity": "600ml (1-4 Cups)", "Color": "Matte Charcoal Black"},
+            tags=["coffee", "dripper", "lifestyle", "ceramic", "kitchen"],
+            priority=8
+        )
+        prod_hz_mouse = Product(
+            id=uuid.uuid4(),
+            tenant_id=t_horizon.id,
+            title="Horizon Wireless Vertical Ergonomic Mouse",
+            slug="horizon-wireless-vertical-ergonomic-mouse",
+            category="Electronics",
+            sku="SKU-HRZ-MSE-04",
+            unit_price=2900.0,
+            selling_price=2350.0,
+            stock_quantity=55,
+            stock_status="in_stock",
+            images=["https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?w=600&auto=format&fit=crop&q=80"],
+            description="57-degree natural handshake posture wireless ergonomic mouse with silent optical clicks, dual Bluetooth 5.0 + 2.4GHz USB receiver, and rechargeable battery.",
+            specifications={"Connectivity": "Bluetooth 5.0 + 2.4G Wireless", "DPI Levels": "800 / 1200 / 1600 / 2400 DPI", "Battery": "500mAh Rechargeable (3 Months)"},
+            tags=["mouse", "ergonomic", "wireless", "office", "electronics"],
+            priority=7
+        )
+        db.add_all([prod_hz_chair, prod_hz_stand, prod_hz_dripper, prod_hz_mouse])
+        await db.flush()
+
+        # Tenant 3: Daraz Seller Hub BD (Enterprise Tier)
         t_daraz = Tenant(
             id=uuid.uuid4(),
             name="Daraz Seller Hub BD",
