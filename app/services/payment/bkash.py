@@ -106,12 +106,16 @@ class BkashService:
         amount: float,
         merchant_invoice: str,
         payer_reference: str,
-        callback_url: str = "http://localhost:3000/subscription/bkash-callback",
+        callback_url: Optional[str] = None,
         intent: str = "sale"
     ) -> Dict[str, Any]:
         """
         Creates a new bKash payment session.
         """
+        from app.core.config import settings
+        if not callback_url:
+            callback_url = f"{settings.FRONTEND_URL}/subscription/bkash-callback"
+            
         token = await self.grant_token()
         url = f"{self.base_url}/checkout/create"
         headers = {

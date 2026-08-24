@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.api.v1.auth import get_current_user, get_optional_current_user
 from app.models.all_models import (
     User, Tenant, Subscription, SubscriptionTier, SubscriptionStatus, AuditLog, UserRole,
@@ -82,7 +83,7 @@ async def create_bkash_checkout_session(
 
     merchant_invoice = f"INV-BK-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
     payer_ref = payload.phone_number or "01770618575"
-    callback_url = f"http://localhost:3000/subscription/bkash-callback?tier={tier_str}&cycle={payload.billing_cycle}"
+    callback_url = f"{settings.FRONTEND_URL}/subscription/bkash-callback?tier={tier_str}&cycle={payload.billing_cycle}"
     if payload.coupon_code:
         callback_url += f"&coupon={payload.coupon_code}"
 
