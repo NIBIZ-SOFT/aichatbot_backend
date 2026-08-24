@@ -1,0 +1,35 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          script: |
+            # Navigate to the project directory on your server
+            # IMPORTANT: Update this path to where your project is located on the VPS!
+            cd /path/to/your/project/aichatbot_backend
+            
+            # Pull the latest changes from the main branch
+            git pull origin main
+            
+            # Rebuild and restart the Docker containers
+            docker compose up --build -d
+            
+            # Clean up dangling images to save space
+            docker image prune -f
