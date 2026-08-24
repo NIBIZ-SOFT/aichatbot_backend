@@ -17,7 +17,7 @@ jobs:
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 147.93.31.214
+          host: npms.pro
           username: root
           password: RsmMonaem66@@
           script: |
