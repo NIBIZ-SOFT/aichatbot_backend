@@ -2,6 +2,7 @@
 .vscode/
 __pycache__/
 *.pyc
+<<<<<<< Updated upstream
 *.pyo
 *.pyd
 .venv/
@@ -15,3 +16,8 @@ logs/
 tests/
 README.md
 *.md
+=======
+.venv/
+venv/
+.env
+>>>>>>> Stashed changes

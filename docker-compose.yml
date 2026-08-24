@@ -1,0 +1,36 @@
+services:
+  backend:
+    build: .
+    container_name: aichat_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://npms_aichat:npms_aichat@db:5432/npms_aichat
+      - POSTGRES_SERVER=db
+      - POSTGRES_USER=npms_aichat
+      - POSTGRES_PASSWORD=npms_aichat
+      - POSTGRES_DB=npms_aichat
+      - POSTGRES_PORT=5432
+      - ENVIRONMENT=production
+      - DEBUG=False
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:15-alpine
+    container_name: aichat_db
+    environment:
+      - POSTGRES_USER=npms_aichat
+      - POSTGRES_PASSWORD=npms_aichat
+      - POSTGRES_DB=npms_aichat
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U npms_aichat -d npms_aichat" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

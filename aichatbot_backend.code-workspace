@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"name": "aichatbot_backend",
+			"path": "."
+		},
+		{
+			"name": "aichatbot_frontend",
+			"path": "../aichatbot_frontend"
+		}
+	]
+}
