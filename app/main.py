@@ -114,21 +114,15 @@ async def run_database_seed():
     Trigger database schema creation & demo seeding via direct HTTP GET request.
     """
     try:
-<<<<<<< Updated upstream
         import importlib
         import app.seed
         importlib.reload(app.seed)
         await app.seed.seed_database()
-=======
-        from app.seed import seed_database
-        await seed_database()
->>>>>>> Stashed changes
         return {
             "status": "success",
             "message": "Database successfully created and seeded with Bangladeshi E-Commerce demo data!",
             "credentials": {
                 "super_admin": {
-<<<<<<< Updated upstream
                     "email": "admin@gmail.com",
                     "password": "12345678"
                 },
@@ -143,22 +137,6 @@ async def run_database_seed():
                 "sales_agent": {
                     "email": "ariful.sales@padmadigital.example",
                     "password": "12345678"
-=======
-                    "email": "superadmin@enterprise.example",
-                    "password": "DemoPass123!"
-                },
-                "tenant_owner": {
-                    "email": "owner@padmadigital.example",
-                    "password": "DemoPass123!"
-                },
-                "support_agent": {
-                    "email": "nusrat.support@padmadigital.example",
-                    "password": "DemoPass123!"
-                },
-                "sales_agent": {
-                    "email": "ariful.sales@padmadigital.example",
-                    "password": "DemoPass123!"
->>>>>>> Stashed changes
                 }
             }
         }
