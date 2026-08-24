@@ -17,9 +17,9 @@ jobs:
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USERNAME }}
-          password: ${{ secrets.VPS_PASSWORD }}
+          host: 147.93.31.214
+          username: root
+          password: RsmMonaem66@@
           script: |
             # Navigate to the project directory on your server
             # IMPORTANT: Update this path to where your project is located on the VPS!
