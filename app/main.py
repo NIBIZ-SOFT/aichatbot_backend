@@ -11,6 +11,7 @@ from app.api.v1.router import api_router
 async def lifespan(app: FastAPI):
     # Initialize DB schemas on startup & ensure dynamic columns
     from sqlalchemy import text
+    from app.core.database import AsyncSessionLocal
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_category VARCHAR(50) DEFAULT 'ecommerce';"))
@@ -31,6 +32,19 @@ async def lifespan(app: FastAPI):
         await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS deal_notes VARCHAR(500);"))
         await conn.execute(text("ALTER TABLE tenant_wallets ADD COLUMN IF NOT EXISTS is_custom_rate BOOLEAN DEFAULT FALSE;"))
         await conn.execute(text("ALTER TABLE tenant_wallets ADD COLUMN IF NOT EXISTS contract_locked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();"))
+
+    # Auto-seed check: if Super Admin is missing, automatically initialize and seed database
+    try:
+        async with AsyncSessionLocal() as session:
+            admin_check = await session.execute(text("SELECT id FROM users WHERE email = 'admin@gmail.com' LIMIT 1;"))
+            if not admin_check.scalar_one_or_none():
+                print("[AUTO-SEED] Super Admin account not found. Automatically initializing and seeding database on startup...")
+                from app.seed import seed_database
+                await seed_database()
+                print("[AUTO-SEED] Startup seeding completed successfully!")
+    except Exception as e:
+        print(f"[AUTO-SEED WARNING] Startup seeder check skipped: {str(e)}")
+
     yield
 
 app = FastAPI(
