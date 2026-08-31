@@ -1,7 +1,7 @@
 import uuid
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, model_validator
 from app.models.all_models import (
     UserRole, SubscriptionTier, SubscriptionStatus,
     ConversationStatus, ConversationPriority, SenderType
@@ -307,6 +307,16 @@ class WidgetMessageSend(BaseModel):
     content: Optional[str] = None
     message: Optional[str] = None
     page_context: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def unify_content(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            raw_text = data.get("content") or data.get("message") or ""
+            text = str(raw_text).strip() if raw_text is not None else ""
+            data["content"] = text
+            data["message"] = text
+        return data
 
 # ---------------- Operations, Subscriptions, Usage ----------------
 class SubscriptionOut(BaseModel):

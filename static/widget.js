@@ -2749,6 +2749,7 @@
             widget_key: widgetKey,
             conversation_id: conversationId,
             visitor_session_id: visitorSessionId,
+            content: text,
             message: text
           })
         });
@@ -2760,8 +2761,11 @@
         var data = await res.json();
         hideTyping();
 
-        if (data.reply) {
-          appendMessage(data.reply, "ai", data.sender_name || "AI Assistant", data.created_at, data.ui_component);
+        if (data.is_handover_requested) {
+          updateAIStatusUI(true);
+        } else if (data.ai_response || data.reply) {
+          var aiText = data.ai_response || data.reply;
+          appendMessage(aiText, "ai", data.sender_name || "AI Assistant", data.created_at, data.ui_component);
         }
       } catch (err) {
         hideTyping();

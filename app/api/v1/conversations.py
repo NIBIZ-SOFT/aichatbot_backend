@@ -268,7 +268,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
         "sender_type": "visitor",
         "sender_name": conversation.visitor_name or "Website Visitor",
         "visitor_name": conversation.visitor_name or "Website Visitor",
-        "content": payload.content,
+        "content": msg_text,
         "created_at": str(datetime.now(timezone.utc)),
         "website_name": widget.name,
         "is_lead": conversation.is_lead_detected
@@ -314,7 +314,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
         safety_cfg = assistant.safety_settings or {}
         guardrails_cfg = safety_cfg.get("guardrails", {}) if isinstance(safety_cfg, dict) else {}
         is_preflight_off_topic, preflight_reason = AISafetyAndRulesEngine.pre_flight_off_topic_check(
-            user_message=payload.content,
+            user_message=msg_text,
             guardrails_cfg=guardrails_cfg
         )
 
@@ -360,7 +360,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 latency_ms=2,
                 sources_cited=[],
                 metadata_json={
-                    "customer_query": payload.content,
+                    "customer_query": msg_text,
                     "pre_flight_intercepted": True,
                     "interception_reason": preflight_reason,
                     "token_breakdown": {
@@ -402,7 +402,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
         
         # 1. Intent Context Routing & Vector RAG Filtering
         conv_phone = (conversation.visitor_metadata or {}).get("visitor_phone") if conversation.visitor_metadata else None
-        order_num_match = re.search(r'(ORD-\d{8}-\w+)', payload.content, re.IGNORECASE)
+        order_num_match = re.search(r'(ORD-\d{8}-\w+)', msg_text, re.IGNORECASE)
 
         ui_component = None
         rag_chunks = []
@@ -435,7 +435,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 )
         else:
             # POLICY / FAQ / GENERAL KNOWLEDGE: Dynamic Vector RAG search against PostgreSQL 18
-            rag_chunks = await rag_service.search_relevant_chunks(tenant_id=widget.tenant_id, query=payload.content, limit=3)
+            rag_chunks = await rag_service.search_relevant_chunks(tenant_id=widget.tenant_id, query=msg_text, limit=3)
             if rag_chunks:
                 rag_context_blocks = [
                     f"### Knowledge Source: {c.get('source', 'Documentation')} [{c.get('category', 'General')}]\n{c['content']}"
@@ -477,7 +477,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
             ai_res = await gemini.generate_chat_response(
                 system_instruction=rendered_system_prompt,
                 chat_history=formatted_history,
-                user_message=payload.content,
+                user_message=msg_text,
                 rag_context=rag_context,
                 model=assistant.model_name,
                 temperature=assistant.temperature,
@@ -492,7 +492,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 ui_component = await GenerativeUIService.resolve_ui_component(
                     db=db,
                     tenant_id=widget.tenant_id,
-                    user_query=payload.content,
+                    user_query=msg_text,
                     tool_calls=tool_calls,
                     conversation_id=conversation.id,
                     visitor_phone=conv_phone
@@ -503,7 +503,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 ui_component = await GenerativeUIService.resolve_ui_component(
                     db=db,
                     tenant_id=widget.tenant_id,
-                    user_query=payload.content,
+                    user_query=msg_text,
                     ai_response_text=raw_ai_text,
                     rag_chunks=rag_chunks,
                     conversation_id=conversation.id,
@@ -580,7 +580,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 latency_ms=ai_res.get("latency_ms", 0),
                 sources_cited=rag_chunks,
                 metadata_json={
-                    "customer_query": payload.content,
+                    "customer_query": msg_text,
                     "token_breakdown": token_breakdown,
                     "ui_component": ui_component,
                     "cost_usd": ai_res.get("cost_usd", 0.0),
