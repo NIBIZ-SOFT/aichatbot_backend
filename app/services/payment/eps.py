@@ -19,21 +19,21 @@ class EpsService:
     """
     def __init__(
         self,
-        base_url: str = "https://sandboxpgapi.eps.com.bd",
-        username: str = "Epsdemo@gmail.com",
-        password: str = "Epsdemo258@",
-        hash_key: str = "FHZxyzeps56789gfhg678ygu876o=",
-        merchant_id: str = "29e86e70-0ac6-45eb-ba04-9fcb0aaed12a",
-        store_id: str = "d44e705f-9e3a-41de-98b1-1674631637da",
-        merchant_number: str = "01700000000"
+        base_url: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        hash_key: Optional[str] = None,
+        merchant_id: Optional[str] = None,
+        store_id: Optional[str] = None,
+        merchant_number: Optional[str] = None
     ):
-        self.base_url = base_url.rstrip("/")
-        self.username = username
-        self.password = password
-        self.hash_key = hash_key
-        self.merchant_id = merchant_id
-        self.store_id = store_id
-        self.merchant_number = merchant_number
+        self.base_url = (base_url or "https://sandboxpgapi.eps.com.bd").rstrip("/")
+        self.username = username or ""
+        self.password = password or ""
+        self.hash_key = hash_key or ""
+        self.merchant_id = merchant_id or ""
+        self.store_id = store_id or ""
+        self.merchant_number = merchant_number or ""
         self._token: Optional[str] = None
         self._token_expiry: float = 0
 
@@ -58,7 +58,7 @@ class EpsService:
             "hash_key": self.hash_key,
             "merchant_id": self.merchant_id,
             "store_id": self.store_id,
-            "merchant_number": getattr(self, "merchant_number", "01700000000"),
+            "merchant_number": getattr(self, "merchant_number", ""),
             "is_sandbox": "sandbox" in self.base_url.lower()
         }
 

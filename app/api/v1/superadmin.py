@@ -682,19 +682,23 @@ async def delete_tenant_account(
 # ----------------- 9. BKASH PAYMENT GATEWAY CONFIGURATION -----------------
 @router.get("/bkash/settings", response_model=BkashSettingsOut)
 async def get_bkash_gateway_settings(
-    admin: User = Depends(require_super_admin)
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Platform Super Admin view of current bKash PGW credentials."""
-    cfg = bkash_service.get_config()
+    """Platform Super Admin view of current bKash PGW credentials from Database."""
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_bkash_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    cfg = setting.value_json if setting else bkash_service.get_config()
+
     return BkashSettingsOut(
-        is_sandbox=cfg["is_sandbox"],
-        base_url=cfg["base_url"],
-        app_key=cfg["app_key"],
-        app_secret=cfg["app_secret"],
-        username=cfg["username"],
-        password=cfg["password"],
+        is_sandbox=cfg.get("is_sandbox", True),
+        base_url=cfg.get("base_url", "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized"),
+        app_key=cfg.get("app_key", ""),
+        app_secret=cfg.get("app_secret", ""),
+        username=cfg.get("username", ""),
+        password=cfg.get("password", ""),
         merchant_number=cfg.get("merchant_number", "01837586105"),
-        status="Live Connected" if not cfg["is_sandbox"] else "Sandbox Test Mode"
+        status="Live Connected" if not cfg.get("is_sandbox", True) else "Sandbox Test Mode"
     )
 
 @router.post("/bkash/settings")
@@ -703,8 +707,18 @@ async def update_bkash_gateway_settings(
     admin: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Platform Super Admin update of platform-wide bKash credentials."""
-    bkash_service.update_config(payload.model_dump())
+    """Platform Super Admin update of platform-wide bKash credentials stored in Database."""
+    dump = payload.model_dump()
+    bkash_service.update_config(dump)
+
+    # Save / Upsert to PostgreSQL PlatformSetting
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_bkash_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if not setting:
+        setting = PlatformSetting(key="platform_bkash_config", value_json=dump)
+        db.add(setting)
+    else:
+        setting.value_json = dump
 
     # Record Audit Log
     audit = AuditLog(
@@ -727,16 +741,22 @@ async def update_bkash_gateway_settings(
 
     return {
         "status": "success",
-        "message": "Platform bKash Payment Gateway settings have been updated successfully.",
+        "message": "Platform bKash Payment Gateway settings have been permanently saved in Database.",
         "is_sandbox": payload.is_sandbox,
         "base_url": payload.base_url
     }
 
 @router.post("/bkash/test-connection", response_model=BkashTestConnectionResponse)
 async def test_bkash_gateway_connection(
-    admin: User = Depends(require_super_admin)
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Platform Super Admin health test to ping bKash token grant endpoint."""
+    """Platform Super Admin health test to ping bKash token grant endpoint using Database credentials."""
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_bkash_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if setting and setting.value_json:
+        bkash_service.update_config(setting.value_json)
+
     t0 = time.time()
     try:
         token = await bkash_service.grant_token()
@@ -745,7 +765,7 @@ async def test_bkash_gateway_connection(
         return BkashTestConnectionResponse(
             status="healthy",
             latency_ms=max(elapsed_ms, 42),
-            message="bKash Token Grant API connection verified successfully.",
+            message="bKash Token Grant API connection verified successfully with Database credentials.",
             token_preview=token_preview
         )
     except Exception as e:
@@ -760,20 +780,24 @@ async def test_bkash_gateway_connection(
 # ----------------- 9.1 EPS PAYMENT GATEWAY CONFIGURATION -----------------
 @router.get("/eps/settings", response_model=EpsSettingsOut)
 async def get_eps_gateway_settings(
-    admin: User = Depends(require_super_admin)
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Platform Super Admin view of current EPS (Easy Payment System) PGW credentials."""
-    cfg = eps_service.get_config()
+    """Platform Super Admin view of current EPS (Easy Payment System) PGW credentials from Database."""
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_eps_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    cfg = setting.value_json if setting else eps_service.get_config()
+
     return EpsSettingsOut(
-        is_sandbox=cfg["is_sandbox"],
-        base_url=cfg["base_url"],
-        username=cfg["username"],
-        password=cfg["password"],
-        hash_key=cfg["hash_key"],
-        merchant_id=cfg["merchant_id"],
-        store_id=cfg["store_id"],
+        is_sandbox=cfg.get("is_sandbox", True),
+        base_url=cfg.get("base_url", "https://sandboxpgapi.eps.com.bd"),
+        username=cfg.get("username", ""),
+        password=cfg.get("password", ""),
+        hash_key=cfg.get("hash_key", ""),
+        merchant_id=cfg.get("merchant_id", ""),
+        store_id=cfg.get("store_id", ""),
         merchant_number=cfg.get("merchant_number", "01700000000"),
-        status="Live Connected" if not cfg["is_sandbox"] else "Sandbox Test Mode"
+        status="Live Connected" if not cfg.get("is_sandbox", True) else "Sandbox Test Mode"
     )
 
 @router.post("/eps/settings")
@@ -782,8 +806,18 @@ async def update_eps_gateway_settings(
     admin: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Platform Super Admin update of platform-wide EPS credentials."""
-    eps_service.update_config(payload.model_dump())
+    """Platform Super Admin update of platform-wide EPS credentials stored in Database."""
+    dump = payload.model_dump()
+    eps_service.update_config(dump)
+
+    # Save / Upsert to PostgreSQL PlatformSetting
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_eps_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if not setting:
+        setting = PlatformSetting(key="platform_eps_config", value_json=dump)
+        db.add(setting)
+    else:
+        setting.value_json = dump
 
     # Record Audit Log
     audit = AuditLog(
@@ -806,16 +840,22 @@ async def update_eps_gateway_settings(
 
     return {
         "status": "success",
-        "message": "Platform EPS Payment Gateway settings have been updated successfully.",
+        "message": "Platform EPS Payment Gateway settings have been permanently saved in Database.",
         "is_sandbox": payload.is_sandbox,
         "base_url": payload.base_url
     }
 
 @router.post("/eps/test-connection", response_model=EpsTestConnectionResponse)
 async def test_eps_gateway_connection(
-    admin: User = Depends(require_super_admin)
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Platform Super Admin health test to ping EPS Auth/GetToken endpoint."""
+    """Platform Super Admin health test to ping EPS Auth/GetToken endpoint using Database credentials."""
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_eps_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if setting and setting.value_json:
+        eps_service.update_config(setting.value_json)
+
     t0 = time.time()
     try:
         token = await eps_service.grant_token()
@@ -824,7 +864,7 @@ async def test_eps_gateway_connection(
         return EpsTestConnectionResponse(
             status="healthy",
             latency_ms=max(elapsed_ms, 35),
-            message="EPS Token Grant API (HMAC-SHA512) verified successfully.",
+            message="EPS Token Grant API (HMAC-SHA512) verified successfully with Database credentials.",
             token_preview=token_preview
         )
     except Exception as e:

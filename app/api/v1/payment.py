@@ -12,16 +12,53 @@ from app.core.config import settings
 from app.api.v1.auth import get_current_user, get_optional_current_user
 from app.models.all_models import (
     User, Tenant, Subscription, SubscriptionTier, SubscriptionStatus, AuditLog, UserRole,
-    Coupon, CouponRedemption
+    Coupon, CouponRedemption, PlatformSetting
 )
-from app.services.payment.bkash import bkash_service
-from app.services.payment.eps import eps_service
+from app.services.payment.bkash import BkashService, bkash_service
+from app.services.payment.eps import EpsService, eps_service
 
 from app.services.billing.pricing_service import PricingService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/payment", tags=["Payment Gateways (bKash & EPS)"])
+
+async def get_platform_bkash_service(db: AsyncSession) -> BkashService:
+    """
+    Returns a BkashService instance configured with SuperAdmin platform credentials from PostgreSQL.
+    """
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_bkash_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if setting and setting.value_json:
+        cfg = setting.value_json
+        return BkashService(
+            base_url=cfg.get("base_url"),
+            app_key=cfg.get("app_key"),
+            app_secret=cfg.get("app_secret"),
+            username=cfg.get("username"),
+            password=cfg.get("password"),
+            merchant_number=cfg.get("merchant_number")
+        )
+    return bkash_service
+
+async def get_platform_eps_service(db: AsyncSession) -> EpsService:
+    """
+    Returns an EpsService instance configured with SuperAdmin platform credentials from PostgreSQL.
+    """
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_eps_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if setting and setting.value_json:
+        cfg = setting.value_json
+        return EpsService(
+            base_url=cfg.get("base_url"),
+            username=cfg.get("username"),
+            password=cfg.get("password"),
+            hash_key=cfg.get("hash_key"),
+            merchant_id=cfg.get("merchant_id"),
+            store_id=cfg.get("store_id"),
+            merchant_number=cfg.get("merchant_number")
+        )
+    return eps_service
 
 def resolve_frontend_url(request: Request, explicit_url: Optional[str] = None) -> str:
     """
@@ -118,7 +155,8 @@ async def create_bkash_checkout_session(
     if payload.coupon_code:
         callback_url += f"&coupon={payload.coupon_code}"
 
-    payment_data = await bkash_service.create_payment(
+    platform_bkash = await get_platform_bkash_service(db)
+    payment_data = await platform_bkash.create_payment(
         amount=amount,
         merchant_invoice=merchant_invoice,
         payer_reference=payer_ref,
@@ -185,7 +223,8 @@ async def execute_bkash_payment(
         max_conversations = 200
 
     # 2. Execute & capture with bKash
-    exec_res = await bkash_service.execute_payment(payload.payment_id)
+    platform_bkash = await get_platform_bkash_service(db)
+    exec_res = await platform_bkash.execute_payment(payload.payment_id)
     trx_id = exec_res.get("trxID", f"TRX_{uuid.uuid4().hex[:8].upper()}")
 
     now = datetime.now(timezone.utc)
@@ -307,12 +346,14 @@ async def execute_bkash_payment(
 @router.get("/bkash/query/{payment_id}")
 async def query_bkash_payment(
     payment_id: str,
-    user: Optional[User] = Depends(get_optional_current_user)
+    user: Optional[User] = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Queries bKash transaction status by paymentID.
     """
-    return await bkash_service.query_payment(payment_id)
+    platform_bkash = await get_platform_bkash_service(db)
+    return await platform_bkash.query_payment(payment_id)
 
 
 # ----------------- PREPAID AI WALLET & TOP-UP APIS -----------------
@@ -362,7 +403,8 @@ class WalletTopupRequest(BaseModel):
 @router.post("/wallet/topup")
 async def init_wallet_topup(
     payload: WalletTopupRequest,
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Initializes a bKash direct payment session for prepaid AI wallet recharge.
@@ -371,7 +413,8 @@ async def init_wallet_topup(
         raise HTTPException(status_code=400, detail="Minimum top-up amount is ৳100.00.")
         
     merchant_invoice = f"TOPUP-{uuid.uuid4().hex[:8].upper()}"
-    res = await bkash_service.create_payment(
+    platform_bkash = await get_platform_bkash_service(db)
+    res = await platform_bkash.create_payment(
         amount=f"{payload.amount_bdt:.2f}",
         merchant_invoice_number=merchant_invoice,
         payer_reference=f"WALLET_{user.tenant_id}"
@@ -407,7 +450,8 @@ async def execute_wallet_topup(
     if not user.tenant_id:
         raise HTTPException(status_code=400, detail="User is not associated with any tenant organization.")
         
-    exec_res = await bkash_service.execute_payment(payload.payment_id)
+    platform_bkash = await get_platform_bkash_service(db)
+    exec_res = await platform_bkash.execute_payment(payload.payment_id)
     if exec_res.get("statusCode") != "0000":
         # In sandbox mode fallback if simulation
         logger.warning(f"bKash execute returned {exec_res.get('statusCode')}: {exec_res.get('statusMessage')}")
@@ -510,7 +554,8 @@ async def create_eps_checkout_session(
     if payload.coupon_code:
         callback_url += f"&coupon={payload.coupon_code}"
 
-    eps_res = await eps_service.initialize_payment(
+    platform_eps = await get_platform_eps_service(db)
+    eps_res = await platform_eps.initialize_payment(
         amount=amount,
         merchant_transaction_id=merchant_txn_id,
         customer_name=customer_name,
@@ -580,7 +625,8 @@ async def execute_eps_payment(
         max_conversations = 200
 
     # 2. Verify with EPS Engine
-    verify_res = await eps_service.verify_transaction(payload.merchant_transaction_id)
+    platform_eps = await get_platform_eps_service(db)
+    verify_res = await platform_eps.verify_transaction(payload.merchant_transaction_id)
     status_str = verify_res.get("status", "SUCCESS")
     if status_str not in ["SUCCESS", "COMPLETED"]:
         raise HTTPException(
@@ -704,12 +750,14 @@ async def execute_eps_payment(
 @router.get("/eps/query/{merchant_transaction_id}")
 async def query_eps_payment(
     merchant_transaction_id: str,
-    user: Optional[User] = Depends(get_optional_current_user)
+    user: Optional[User] = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Queries EPS transaction status by merchantTransactionId.
     """
-    return await eps_service.verify_transaction(merchant_transaction_id)
+    platform_eps = await get_platform_eps_service(db)
+    return await platform_eps.verify_transaction(merchant_transaction_id)
 
 
 # ----------------- EPS PREPAID AI WALLET TOP-UP APIS -----------------
@@ -718,7 +766,8 @@ async def query_eps_payment(
 async def init_eps_wallet_topup(
     request: Request,
     payload: WalletTopupRequest,
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Initializes an EPS payment session for prepaid AI wallet recharge.
@@ -730,7 +779,8 @@ async def init_eps_wallet_topup(
     base_url = resolve_frontend_url(request, payload.frontend_url)
     callback_url = f"{base_url}/subscription/eps-callback?wallet_topup=true"
 
-    eps_res = await eps_service.initialize_payment(
+    platform_eps = await get_platform_eps_service(db)
+    eps_res = await platform_eps.initialize_payment(
         amount=payload.amount_bdt,
         merchant_transaction_id=merchant_txn_id,
         customer_name=user.full_name or "Valued Tenant",
@@ -762,7 +812,8 @@ async def execute_eps_wallet_topup(
     if not user.tenant_id:
         raise HTTPException(status_code=400, detail="User is not associated with any tenant organization.")
 
-    verify_res = await eps_service.verify_transaction(payload.merchant_transaction_id)
+    platform_eps = await get_platform_eps_service(db)
+    verify_res = await platform_eps.verify_transaction(payload.merchant_transaction_id)
     if verify_res.get("status") not in ["SUCCESS", "COMPLETED"]:
         logger.warning(f"EPS wallet verify returned {verify_res}")
 

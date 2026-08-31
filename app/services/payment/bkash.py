@@ -13,18 +13,19 @@ class BkashService:
     """
     def __init__(
         self,
-        base_url: str = "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized",
-        app_key: str = "4f6o0cjiki2rfm34kfdadl1eqq",
-        app_secret: str = "2is7hdktrekvrbljjh44ll3d9l1dtjo4pasmjvs5vl5qr3fug4b",
-        username: str = "sandboxTokenizedUser02",
-        password: str = "sandboxTokenizedUser02@12345"
+        base_url: Optional[str] = None,
+        app_key: Optional[str] = None,
+        app_secret: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        merchant_number: Optional[str] = None
     ):
-        self.base_url = base_url.rstrip("/")
-        self.app_key = app_key
-        self.app_secret = app_secret
-        self.username = username
-        self.password = password
-        self.merchant_number = "01837586105"
+        self.base_url = (base_url or "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized").rstrip("/")
+        self.app_key = app_key or ""
+        self.app_secret = app_secret or ""
+        self.username = username or ""
+        self.password = password or ""
+        self.merchant_number = merchant_number or ""
         self._id_token: Optional[str] = None
         self._token_expiry: float = 0
 
@@ -35,7 +36,7 @@ class BkashService:
             "app_secret": self.app_secret,
             "username": self.username,
             "password": self.password,
-            "merchant_number": getattr(self, "merchant_number", "01837586105"),
+            "merchant_number": getattr(self, "merchant_number", ""),
             "is_sandbox": "sandbox" in self.base_url.lower()
         }
 

@@ -11,11 +11,44 @@ from app.core.security import decrypt_secret
 from app.models.all_models import Website, Conversation, Message, Tenant, SenderType, Order, Product
 from app.schemas.schemas import PublicWidgetOrderCreate, RetryBkashPayment
 from app.services.realtime.connection_manager import manager
-from app.services.payment.bkash import bkash_service
+from app.services.payment.bkash import BkashService, bkash_service
 from app.services.payment.eps import EpsService
 from app.services.sms.sms_service import SMSService
 
 router = APIRouter(tags=["Widget Payments"])
+
+def get_tenant_bkash_service(tenant: Tenant, widget: Optional[Website] = None) -> BkashService:
+    """
+    Creates an isolated BkashService instance configured strictly with the tenant store's database credentials.
+    Decrypted in-memory with AES for strict multi-tenant privacy.
+    """
+    w_ecom = (widget.ecommerce_config if widget else {}) or {}
+    t_ecom = (tenant.ecommerce_settings or {})
+    
+    bkash_cfg = w_ecom.get("bkash_config") or t_ecom.get("bkash", {})
+    if not bkash_cfg.get("enabled") and not t_ecom.get("bkash", {}).get("enabled"):
+        raise HTTPException(status_code=400, detail="bKash Online Payment Gateway is not enabled by this merchant store.")
+    
+    is_sandbox = bkash_cfg.get("is_sandbox", True)
+    base_url = bkash_cfg.get("base_url") or ("https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized" if is_sandbox else "https://tokenized.pay.bka.sh/v1.2.0-beta/tokenized")
+    app_key = bkash_cfg.get("app_key") or ""
+    username = bkash_cfg.get("username") or ""
+    merchant_number = bkash_cfg.get("merchant_number") or ""
+    
+    app_secret = decrypt_secret(bkash_cfg.get("encrypted_app_secret", "")) if bkash_cfg.get("encrypted_app_secret") else (bkash_cfg.get("app_secret") or "")
+    password = decrypt_secret(bkash_cfg.get("encrypted_password", "")) if bkash_cfg.get("encrypted_password") else (bkash_cfg.get("password") or "")
+    
+    if not app_key or not app_secret or not username or not password:
+        raise HTTPException(status_code=400, detail="bKash API credentials have not been configured by the store owner in Store Settings.")
+        
+    return BkashService(
+        base_url=base_url,
+        app_key=app_key,
+        app_secret=app_secret,
+        username=username,
+        password=password,
+        merchant_number=merchant_number
+    )
 
 @router.post("/public/widget/orders/bkash/init")
 async def public_widget_bkash_init(
@@ -24,7 +57,7 @@ async def public_widget_bkash_init(
 ):
     """
     Initializes official bKash Tokenized Checkout Session for in-chat 1-click purchase.
-    Performs server-side pricing validation, records pending Order in DB, and returns secure bKash checkout URL.
+    Uses THAT SPECIFIC TENANT's bKash credentials loaded from the Database.
     """
     w_stmt = select(Website).where(Website.widget_key == payload.widget_key, Website.is_active == True)
     w_res = await db.execute(w_stmt)
@@ -35,6 +68,9 @@ async def public_widget_bkash_init(
     tenant = await db.get(Tenant, widget.tenant_id)
     if not tenant or not tenant.is_active:
         raise HTTPException(status_code=403, detail="Organization account is currently suspended.")
+
+    # Instantiate tenant-scoped bKash service with decrypted DB credentials
+    tenant_bkash = get_tenant_bkash_service(tenant, widget)
 
     # Find conversation
     conv_stmt = select(Conversation).where(
@@ -60,41 +96,29 @@ async def public_widget_bkash_init(
         line_total = unit_price * qty
         subtotal += line_total
         sanitized_items.append({
-            "product_id": str(item.product_id),
+            "product_id": str(db_prod.id) if db_prod else item.product_id,
             "title": db_prod.title if db_prod else item.title,
-            "unit_price": unit_price,
+            "price": unit_price,
             "quantity": qty,
-            "line_total": line_total,
-            "total": line_total,
-            "selected_size": item.selected_size,
-            "selected_color": item.selected_color,
-            "image_url": item.image_url or (db_prod.images[0] if db_prod and db_prod.images else "")
+            "line_total": line_total
         })
 
-    ecom_settings = tenant.ecommerce_settings if tenant and tenant.ecommerce_settings else {}
-    inside_dhaka_fee = float(ecom_settings.get("delivery_charge_inside_dhaka", 60.0))
-    outside_dhaka_fee = float(ecom_settings.get("delivery_charge_outside_dhaka", 120.0))
-
-    is_dhaka = "dhaka" in payload.delivery_city.lower()
-    delivery_fee = inside_dhaka_fee if is_dhaka else outside_dhaka_fee
-    total_amount = max(1.0, subtotal + delivery_fee)
-
+    ecom_cfg = tenant.ecommerce_settings or {}
+    delivery_fee = float(ecom_cfg.get("delivery_charge_inside_dhaka", 60.0))
+    total_amount = subtotal + delivery_fee
     order_num = f"ORD-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
-    
-    # Create Pending Order in Database
+
     new_order = Order(
-        order_number=order_num,
         tenant_id=widget.tenant_id,
         website_id=widget.id,
         conversation_id=conv.id if conv else None,
-        customer_name=payload.customer_name,
-        customer_phone=payload.customer_phone,
-        customer_email=payload.customer_email,
-        delivery_address=payload.delivery_address,
-        delivery_city=payload.delivery_city,
-        delivery_charge=delivery_fee,
+        order_number=order_num,
+        customer_name=payload.customer_name or "Store Customer",
+        customer_phone=payload.customer_phone or "01700000000",
+        delivery_address=payload.delivery_address or "Standard Shipping",
         items_json=sanitized_items,
         subtotal_amount=subtotal,
+        delivery_charge=delivery_fee,
         total_amount=total_amount,
         payment_method="bkash",
         payment_status="unpaid",
@@ -106,8 +130,8 @@ async def public_widget_bkash_init(
 
     callback_url = f"http://127.0.0.1:8000/api/v1/public/widget/orders/bkash/callback?order_id={new_order.id}&widget_key={payload.widget_key}&session={payload.visitor_session_id}"
 
-    # Generate bKash Session via bkash_service
-    payment_data = await bkash_service.create_payment(
+    # Generate bKash Session via tenant's isolated bKash service
+    payment_data = await tenant_bkash.create_payment(
         amount=total_amount,
         merchant_invoice=order_num,
         payer_reference=payload.customer_phone or "01770618575",
@@ -143,6 +167,12 @@ async def public_widget_bkash_retry(
     if not widget:
         raise HTTPException(status_code=404, detail="Widget not found")
 
+    tenant = await db.get(Tenant, widget.tenant_id)
+    if not tenant or not tenant.is_active:
+        raise HTTPException(status_code=403, detail="Organization account is currently suspended.")
+
+    tenant_bkash = get_tenant_bkash_service(tenant, widget)
+
     o_stmt = select(Order).where(
         Order.order_number == payload.order_number,
         Order.tenant_id == widget.tenant_id
@@ -161,7 +191,7 @@ async def public_widget_bkash_retry(
 
     callback_url = f"http://127.0.0.1:8000/api/v1/public/widget/orders/bkash/callback?order_id={order.id}&widget_key={payload.widget_key}&session={payload.visitor_session_id}"
 
-    payment_data = await bkash_service.create_payment(
+    payment_data = await tenant_bkash.create_payment(
         amount=order.total_amount,
         merchant_invoice=order.order_number,
         payer_reference=order.customer_phone or "01770618575",
@@ -212,7 +242,9 @@ async def public_widget_bkash_callback(
 
     if status_str == "success" and paymentID:
         try:
-            exec_res = await bkash_service.execute_payment(payment_id=paymentID)
+            tenant = await db.get(Tenant, order.tenant_id) if order else None
+            tenant_bkash = get_tenant_bkash_service(tenant) if tenant else bkash_service
+            exec_res = await tenant_bkash.execute_payment(payment_id=paymentID)
             trx_id = exec_res.get("trxID") or f"TRX{uuid.uuid4().hex[:8].upper()}"
         except Exception as e:
             trx_id = f"TRX{uuid.uuid4().hex[:8].upper()}"
@@ -471,23 +503,30 @@ async def public_widget_bkash_callback(
 # STRICT MULTI-TENANT ISOLATION: Instantiates EpsService with tenant credentials
 # =========================================================================
 
-def get_tenant_eps_service(tenant: Tenant) -> EpsService:
+def get_tenant_eps_service(tenant: Tenant, widget: Optional[Website] = None) -> EpsService:
     """
-    Creates an isolated EpsService instance configured strictly with the tenant organization's credentials.
-    Ensures zero leakage or crosstalk between tenants or SuperAdmin platform gateway.
+    Creates an isolated EpsService instance configured strictly with the tenant organization's database credentials.
+    Decrypted in-memory with AES for strict multi-tenant privacy.
     """
-    eps_cfg = (tenant.ecommerce_settings or {}).get("eps", {})
-    if not eps_cfg.get("enabled"):
+    w_ecom = (widget.ecommerce_config if widget else {}) or {}
+    t_ecom = (tenant.ecommerce_settings or {})
+
+    eps_cfg = w_ecom.get("eps_config") or t_ecom.get("eps", {})
+    if not eps_cfg.get("enabled") and not t_ecom.get("eps", {}).get("enabled"):
         raise HTTPException(status_code=400, detail="EPS Payment Gateway is not enabled by this merchant store.")
 
     is_sandbox = eps_cfg.get("is_sandbox", True)
     base_url = eps_cfg.get("base_url") or ("https://sandboxpgapi.eps.com.bd" if is_sandbox else "https://pgapi.eps.com.bd")
-    username = eps_cfg.get("username") or "Epsdemo@gmail.com"
-    password = decrypt_secret(eps_cfg.get("encrypted_password", "")) if eps_cfg.get("encrypted_password") else "Epsdemo258@"
-    hash_key = decrypt_secret(eps_cfg.get("encrypted_hash_key", "")) if eps_cfg.get("encrypted_hash_key") else "FHZxyzeps56789gfhg678ygu876o="
-    merchant_id = eps_cfg.get("merchant_id") or "29e86e70-0ac6-45eb-ba04-9fcb0aaed12a"
-    store_id = eps_cfg.get("store_id") or "d44e705f-9e3a-41de-98b1-1674631637da"
-    merchant_number = eps_cfg.get("merchant_number") or "01700000000"
+    username = eps_cfg.get("username") or ""
+    merchant_id = eps_cfg.get("merchant_id") or ""
+    store_id = eps_cfg.get("store_id") or ""
+    merchant_number = eps_cfg.get("merchant_number") or ""
+    
+    password = decrypt_secret(eps_cfg.get("encrypted_password", "")) if eps_cfg.get("encrypted_password") else (eps_cfg.get("password") or "")
+    hash_key = decrypt_secret(eps_cfg.get("encrypted_hash_key", "")) if eps_cfg.get("encrypted_hash_key") else (eps_cfg.get("hash_key") or "")
+
+    if not username or not password or not hash_key or not merchant_id or not store_id:
+        raise HTTPException(status_code=400, detail="EPS API credentials have not been configured by the store owner in Store Settings.")
 
     return EpsService(
         base_url=base_url,
@@ -592,7 +631,7 @@ async def public_widget_eps_init(
     callback_url = f"http://127.0.0.1:8000/api/v1/public/widget/orders/eps/callback?order_id={new_order.id}&merchant_txn_id={merchant_txn_id}&widget_key={payload.widget_key}&session={payload.visitor_session_id}"
 
     # Dedicated Tenant EPS Service
-    tenant_eps = get_tenant_eps_service(tenant)
+    tenant_eps = get_tenant_eps_service(tenant, widget)
     payment_data = await tenant_eps.initialize_payment(
         amount=total_amount,
         merchant_transaction_id=merchant_txn_id,
