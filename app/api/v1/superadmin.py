@@ -592,6 +592,21 @@ async def update_global_ai_settings(
         "config": gemini_service.get_config()
     }
 
+@router.get("/infrastructure/openrouter-models")
+async def get_openrouter_live_models(
+    query: Optional[str] = Query(None, description="Search keyword e.g. gemini, gpt-4o, deepseek"),
+    provider: Optional[str] = Query(None, description="Filter provider e.g. google, openai, anthropic, deepseek, meta, free"),
+    tools_only: bool = Query(False, description="Filter only models supporting function calling"),
+    admin: User = Depends(require_super_admin)
+):
+    """Fetches real-time model catalog and pricing directly from OpenRouter API."""
+    models = await gemini_service.fetch_openrouter_models(query=query or "", provider=provider or "", tools_only=tools_only)
+    return {
+        "status": "success",
+        "total": len(models),
+        "models": models
+    }
+
 @router.post("/infrastructure/test-ai")
 async def test_platform_ai_ping(
     admin: User = Depends(require_super_admin)
@@ -600,7 +615,7 @@ async def test_platform_ai_ping(
     import asyncio, time
     start_t = time.time()
     ai_cfg = gemini_service.get_config()
-    current_model = ai_cfg.get("master_model", "gemini-2.5-flash")
+    current_model = ai_cfg.get("master_model", "google/gemini-2.5-flash")
     try:
         result = await asyncio.wait_for(
             gemini_service.generate_chat_response(
@@ -609,7 +624,7 @@ async def test_platform_ai_ping(
                 user_message="Platform AI connectivity check",
                 model=current_model
             ),
-            timeout=5.0
+            timeout=8.0
         )
         elapsed_ms = int((time.time() - start_t) * 1000)
         return {
