@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     # Environment
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
-    FRONTEND_URL: str = "https://jobab.chat"
+    FRONTEND_URL: str = "http://localhost:3000"
 
     model_config = {
         "env_file": ".env",

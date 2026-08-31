@@ -2,7 +2,7 @@ import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -23,11 +23,39 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/payment", tags=["Payment Gateways (bKash & EPS)"])
 
+def resolve_frontend_url(request: Request, explicit_url: Optional[str] = None) -> str:
+    """
+    Dynamically determines the appropriate frontend base URL:
+    - If explicit_url is passed by client (e.g. window.location.origin), use it.
+    - Else inspect 'origin' header from client browser (e.g. http://localhost:3000 or https://jobab.chat).
+    - Else inspect 'referer' header.
+    - Fallback: settings.FRONTEND_URL (e.g. http://localhost:3000 or https://jobab.chat).
+    """
+    if explicit_url and explicit_url.strip().startswith("http"):
+        return explicit_url.strip().rstrip("/")
+    
+    origin = request.headers.get("origin")
+    if origin and origin.strip().startswith("http"):
+        return origin.strip().rstrip("/")
+
+    referer = request.headers.get("referer")
+    if referer and referer.strip().startswith("http"):
+        from urllib.parse import urlparse
+        parsed = urlparse(referer.strip())
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+    if getattr(settings, "ENVIRONMENT", "development") == "development":
+        return "http://localhost:3000"
+
+    return settings.FRONTEND_URL.rstrip("/")
+
 class BkashCreatePaymentRequest(BaseModel):
     tier: str
     billing_cycle: Optional[str] = "monthly"  # "monthly" or "annual"
     phone_number: Optional[str] = "01770618575"
     coupon_code: Optional[str] = None
+    frontend_url: Optional[str] = None
 
 class BkashExecutePaymentRequest(BaseModel):
     payment_id: str
@@ -38,6 +66,7 @@ class BkashExecutePaymentRequest(BaseModel):
 
 @router.post("/bkash/create")
 async def create_bkash_checkout_session(
+    request: Request,
     payload: BkashCreatePaymentRequest,
     user: Optional[User] = Depends(get_optional_current_user),
     db: AsyncSession = Depends(get_db)
@@ -84,7 +113,8 @@ async def create_bkash_checkout_session(
 
     merchant_invoice = f"INV-BK-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
     payer_ref = payload.phone_number or "01770618575"
-    callback_url = f"{settings.FRONTEND_URL}/subscription/bkash-callback?tier={tier_str}&cycle={payload.billing_cycle}"
+    base_url = resolve_frontend_url(request, payload.frontend_url)
+    callback_url = f"{base_url}/subscription/bkash-callback?tier={tier_str}&cycle={payload.billing_cycle}"
     if payload.coupon_code:
         callback_url += f"&coupon={payload.coupon_code}"
 
@@ -327,6 +357,7 @@ async def get_tenant_wallet(
 
 class WalletTopupRequest(BaseModel):
     amount_bdt: float
+    frontend_url: Optional[str] = None
 
 @router.post("/wallet/topup")
 async def init_wallet_topup(
@@ -413,6 +444,7 @@ class EpsCreatePaymentRequest(BaseModel):
     customer_phone: Optional[str] = "01700000000"
     customer_address: Optional[str] = "Dhaka, Bangladesh"
     coupon_code: Optional[str] = None
+    frontend_url: Optional[str] = None
 
 class EpsExecutePaymentRequest(BaseModel):
     merchant_transaction_id: str
@@ -423,6 +455,7 @@ class EpsExecutePaymentRequest(BaseModel):
 
 @router.post("/eps/create")
 async def create_eps_checkout_session(
+    request: Request,
     payload: EpsCreatePaymentRequest,
     user: Optional[User] = Depends(get_optional_current_user),
     db: AsyncSession = Depends(get_db)
@@ -472,7 +505,8 @@ async def create_eps_checkout_session(
     customer_email = payload.customer_email or (user.email if user else "guest@checkout.local")
     customer_phone = payload.customer_phone or "01700000000"
 
-    callback_url = f"{settings.FRONTEND_URL}/subscription/eps-callback?tier={tier_str}&cycle={payload.billing_cycle}"
+    base_url = resolve_frontend_url(request, payload.frontend_url)
+    callback_url = f"{base_url}/subscription/eps-callback?tier={tier_str}&cycle={payload.billing_cycle}"
     if payload.coupon_code:
         callback_url += f"&coupon={payload.coupon_code}"
 
@@ -682,6 +716,7 @@ async def query_eps_payment(
 
 @router.post("/wallet/topup-eps")
 async def init_eps_wallet_topup(
+    request: Request,
     payload: WalletTopupRequest,
     user: User = Depends(get_current_user)
 ):
@@ -692,7 +727,8 @@ async def init_eps_wallet_topup(
         raise HTTPException(status_code=400, detail="Minimum top-up amount is ৳100.00.")
 
     merchant_txn_id = f"TOPUP-EPS-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
-    callback_url = f"{settings.FRONTEND_URL}/subscription/eps-callback?wallet_topup=true"
+    base_url = resolve_frontend_url(request, payload.frontend_url)
+    callback_url = f"{base_url}/subscription/eps-callback?wallet_topup=true"
 
     eps_res = await eps_service.initialize_payment(
         amount=payload.amount_bdt,
