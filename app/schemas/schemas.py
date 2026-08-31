@@ -304,7 +304,8 @@ class WidgetInitSession(BaseModel):
 class WidgetMessageSend(BaseModel):
     widget_key: str
     visitor_session_id: str
-    content: str
+    content: Optional[str] = None
+    message: Optional[str] = None
     page_context: Optional[Dict[str, Any]] = None
 
 # ---------------- Operations, Subscriptions, Usage ----------------

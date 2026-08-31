@@ -169,12 +169,17 @@ async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Dep
 
     # Merge website-level overrides with tenant defaults
     w_ecom = widget.ecommerce_config or {}
+    t_bkash_enabled = bool(t_ecom.get("bkash", {}).get("enabled", False))
+    t_eps_enabled = bool(t_ecom.get("eps", {}).get("enabled", False))
+    t_cod_enabled = bool(t_ecom.get("cod_enabled", True))
+
     merged_ecommerce = {
         "enabled": is_ecommerce and w_ecom.get("enabled", True),
         "show_products_carousel": is_ecommerce and w_ecom.get("show_products_carousel", True),
         "allow_instant_checkout": is_ecommerce and w_ecom.get("allow_instant_checkout", True),
-        "cod_enabled": is_ecommerce and w_ecom.get("cod_enabled", t_ecom.get("cod_enabled", True)),
-        "bkash_enabled": is_ecommerce and w_ecom.get("bkash_enabled", t_ecom.get("bkash", {}).get("enabled", False)),
+        "cod_enabled": is_ecommerce and w_ecom.get("cod_enabled", t_cod_enabled),
+        "bkash_enabled": is_ecommerce and w_ecom.get("bkash_enabled", t_bkash_enabled),
+        "eps_enabled": is_ecommerce and w_ecom.get("eps_enabled", t_eps_enabled),
         "delivery_charge_inside_dhaka": float(w_ecom.get("delivery_charge_inside_dhaka", t_ecom.get("delivery_charge_inside_dhaka", 60.0))),
         "delivery_charge_outside_dhaka": float(w_ecom.get("delivery_charge_outside_dhaka", t_ecom.get("delivery_charge_outside_dhaka", 120.0)))
     }
@@ -220,21 +225,22 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
         raise HTTPException(status_code=404, detail="Conversation not initialized")
 
     # 1. Store visitor message
+    msg_text = (payload.content or payload.message or "").strip()
     visitor_msg = Message(
         conversation_id=conversation.id,
         sender_type=SenderType.VISITOR,
         sender_id=payload.visitor_session_id,
-        content=payload.content
+        content=msg_text
     )
     db.add(visitor_msg)
     
     # 2. Check Lead & Sentiment
-    lead_info = AISafetyAndRulesEngine.detect_lead(payload.content)
+    lead_info = AISafetyAndRulesEngine.detect_lead(msg_text)
     if lead_info["is_lead"]:
         conversation.is_lead_detected = True
         conversation.lead_data = lead_info
 
-    sentiment = AISafetyAndRulesEngine.analyze_sentiment(payload.content)
+    sentiment = AISafetyAndRulesEngine.analyze_sentiment(msg_text)
     conversation.last_sentiment_score = sentiment
 
     # 3. Resolve AI Assistant
@@ -246,7 +252,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
 
     # Check Human Handover Triggers
     wants_handover = AISafetyAndRulesEngine.check_human_handover(
-        payload.content, 
+        msg_text, 
         assistant.auto_handover_keywords if assistant else []
     )
     if wants_handover:
