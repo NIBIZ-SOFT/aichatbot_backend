@@ -119,6 +119,33 @@ class BkashTestConnectionResponse(BaseModel):
     message: str
     token_preview: str
 
+class EpsSettingsPayload(BaseModel):
+    is_sandbox: bool
+    base_url: str
+    username: str
+    password: str
+    hash_key: str
+    merchant_id: str
+    store_id: str
+    merchant_number: Optional[str] = "01700000000"
+
+class EpsSettingsOut(BaseModel):
+    is_sandbox: bool
+    base_url: str
+    username: str
+    password: str
+    hash_key: str
+    merchant_id: str
+    store_id: str
+    merchant_number: str
+    status: str
+
+class EpsTestConnectionResponse(BaseModel):
+    status: str
+    latency_ms: int
+    message: str
+    token_preview: str
+
 class PricingPlanPayload(BaseModel):
     code: str
     name: str

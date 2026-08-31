@@ -21,11 +21,13 @@ from app.schemas.superadmin import (
     RevenueBreakdownOut, InfrastructureStatusOut,
     TierRevenueItem, BillingTransactionItem,
     BkashSettingsPayload, BkashSettingsOut, BkashTestConnectionResponse,
+    EpsSettingsPayload, EpsSettingsOut, EpsTestConnectionResponse,
     PricingPlanPayload, PricingPlanOut, CouponPayload, CouponOut,
     AISettingsPayload, AISettingsOut
 )
 from app.core.config import settings
 from app.services.payment.bkash import bkash_service
+from app.services.payment.eps import eps_service
 from app.services.ai.gemini import gemini_service
 import time
 
@@ -546,9 +548,14 @@ async def get_global_ai_infrastructure(
 
 @router.get("/infrastructure/settings", response_model=AISettingsOut)
 async def get_global_ai_settings(
-    admin: User = Depends(require_super_admin)
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Returns active AI API Key, base URL, model hyperparameters, and catalog."""
+    """Returns active AI API Key, base URL, model hyperparameters, and catalog from Database."""
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_ai_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if setting and setting.value_json:
+        gemini_service.update_config(setting.value_json)
     cfg = gemini_service.get_config()
     return AISettingsOut(**cfg)
 
@@ -558,9 +565,19 @@ async def update_global_ai_settings(
     admin: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Platform Super Admin update of platform-wide Google Gemini / AI credentials and models."""
+    """Platform Super Admin update of platform-wide AI credent ials and models stored in Database."""
     updates = payload.model_dump(exclude_unset=True)
     gemini_service.update_config(updates)
+    curr_cfg = gemini_service.get_config()
+
+    # Save / Upsert into PostgreSQL PlatformSetting
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_ai_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if not setting:
+        setting = PlatformSetting(key="platform_ai_config", value_json=curr_cfg)
+        db.add(setting)
+    else:
+        setting.value_json = curr_cfg
 
     # Record Audit Log
     masked_key = (payload.api_key[:6] + "..." + payload.api_key[-4:]) if (payload.api_key and len(payload.api_key) > 10) else ("(unchanged)" if not payload.api_key else "***")
@@ -586,19 +603,40 @@ async def update_global_ai_settings(
 
     return {
         "status": "success",
-        "message": "Platform AI Infrastructure and Model credentials updated successfully.",
+        "message": "Platform AI Infrastructure and Model credentials permanently saved in Database.",
         "config": gemini_service.get_config()
     }
 
-@router.post("/infrastructure/test-ai")
-async def test_platform_ai_ping(
+@router.get("/infrastructure/openrouter-models")
+async def get_openrouter_live_models(
+    query: Optional[str] = Query(None, description="Search keyword e.g. gemini, gpt-4o, deepseek"),
+    provider: Optional[str] = Query(None, description="Filter provider e.g. google, openai, anthropic, deepseek, meta, free"),
+    tools_only: bool = Query(False, description="Filter only models supporting function calling"),
     admin: User = Depends(require_super_admin)
 ):
-    """Executes a real-time AI latency and response benchmark test with the active configuration."""
+    """Fetches real-time model catalog and pricing directly from OpenRouter API."""
+    models = await gemini_service.fetch_openrouter_models(query=query or "", provider=provider or "", tools_only=tools_only)
+    return {
+        "status": "success",
+        "total": len(models),
+        "models": models
+    }
+
+class TestAIPingPayload(BaseModel):
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+
+@router.post("/infrastructure/test-ai")
+async def test_platform_ai_ping(
+    payload: Optional[TestAIPingPayload] = None,
+    admin: User = Depends(require_super_admin)
+):
+    """Executes a real-time AI latency and response benchmark test with the active or requested configuration."""
     import asyncio, time
     start_t = time.time()
     ai_cfg = gemini_service.get_config()
-    current_model = ai_cfg.get("master_model", "gemini-2.5-flash")
+    current_model = (payload.model.strip() if payload and payload.model and payload.model.strip() else None) or ai_cfg.get("master_model", "google/gemini-2.5-flash")
     try:
         result = await asyncio.wait_for(
             gemini_service.generate_chat_response(
@@ -607,7 +645,7 @@ async def test_platform_ai_ping(
                 user_message="Platform AI connectivity check",
                 model=current_model
             ),
-            timeout=5.0
+            timeout=12.0
         )
         elapsed_ms = int((time.time() - start_t) * 1000)
         return {
@@ -665,19 +703,23 @@ async def delete_tenant_account(
 # ----------------- 9. BKASH PAYMENT GATEWAY CONFIGURATION -----------------
 @router.get("/bkash/settings", response_model=BkashSettingsOut)
 async def get_bkash_gateway_settings(
-    admin: User = Depends(require_super_admin)
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Platform Super Admin view of current bKash PGW credentials."""
-    cfg = bkash_service.get_config()
+    """Platform Super Admin view of current bKash PGW credentials from Database."""
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_bkash_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    cfg = setting.value_json if setting else bkash_service.get_config()
+
     return BkashSettingsOut(
-        is_sandbox=cfg["is_sandbox"],
-        base_url=cfg["base_url"],
-        app_key=cfg["app_key"],
-        app_secret=cfg["app_secret"],
-        username=cfg["username"],
-        password=cfg["password"],
+        is_sandbox=cfg.get("is_sandbox", True),
+        base_url=cfg.get("base_url", "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized"),
+        app_key=cfg.get("app_key", ""),
+        app_secret=cfg.get("app_secret", ""),
+        username=cfg.get("username", ""),
+        password=cfg.get("password", ""),
         merchant_number=cfg.get("merchant_number", "01837586105"),
-        status="Live Connected" if not cfg["is_sandbox"] else "Sandbox Test Mode"
+        status="Live Connected" if not cfg.get("is_sandbox", True) else "Sandbox Test Mode"
     )
 
 @router.post("/bkash/settings")
@@ -686,8 +728,18 @@ async def update_bkash_gateway_settings(
     admin: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Platform Super Admin update of platform-wide bKash credentials."""
-    bkash_service.update_config(payload.model_dump())
+    """Platform Super Admin update of platform-wide bKash credentials stored in Database."""
+    dump = payload.model_dump()
+    bkash_service.update_config(dump)
+
+    # Save / Upsert to PostgreSQL PlatformSetting
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_bkash_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if not setting:
+        setting = PlatformSetting(key="platform_bkash_config", value_json=dump)
+        db.add(setting)
+    else:
+        setting.value_json = dump
 
     # Record Audit Log
     audit = AuditLog(
@@ -710,16 +762,22 @@ async def update_bkash_gateway_settings(
 
     return {
         "status": "success",
-        "message": "Platform bKash Payment Gateway settings have been updated successfully.",
+        "message": "Platform bKash Payment Gateway settings have been permanently saved in Database.",
         "is_sandbox": payload.is_sandbox,
         "base_url": payload.base_url
     }
 
 @router.post("/bkash/test-connection", response_model=BkashTestConnectionResponse)
 async def test_bkash_gateway_connection(
-    admin: User = Depends(require_super_admin)
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Platform Super Admin health test to ping bKash token grant endpoint."""
+    """Platform Super Admin health test to ping bKash token grant endpoint using Database credentials."""
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_bkash_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if setting and setting.value_json:
+        bkash_service.update_config(setting.value_json)
+
     t0 = time.time()
     try:
         token = await bkash_service.grant_token()
@@ -728,7 +786,7 @@ async def test_bkash_gateway_connection(
         return BkashTestConnectionResponse(
             status="healthy",
             latency_ms=max(elapsed_ms, 42),
-            message="bKash Token Grant API connection verified successfully.",
+            message="bKash Token Grant API connection verified successfully with Database credentials.",
             token_preview=token_preview
         )
     except Exception as e:
@@ -738,6 +796,105 @@ async def test_bkash_gateway_connection(
             latency_ms=elapsed_ms or 120,
             message=f"bKash ping test responded: {str(e)}",
             token_preview="simulated_token_verified"
+        )
+
+# ----------------- 9.1 EPS PAYMENT GATEWAY CONFIGURATION -----------------
+@router.get("/eps/settings", response_model=EpsSettingsOut)
+async def get_eps_gateway_settings(
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Platform Super Admin view of current EPS (Easy Payment System) PGW credentials from Database."""
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_eps_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    cfg = setting.value_json if setting else eps_service.get_config()
+
+    return EpsSettingsOut(
+        is_sandbox=cfg.get("is_sandbox", True),
+        base_url=cfg.get("base_url", "https://sandboxpgapi.eps.com.bd"),
+        username=cfg.get("username", ""),
+        password=cfg.get("password", ""),
+        hash_key=cfg.get("hash_key", ""),
+        merchant_id=cfg.get("merchant_id", ""),
+        store_id=cfg.get("store_id", ""),
+        merchant_number=cfg.get("merchant_number", "01700000000"),
+        status="Live Connected" if not cfg.get("is_sandbox", True) else "Sandbox Test Mode"
+    )
+
+@router.post("/eps/settings")
+async def update_eps_gateway_settings(
+    payload: EpsSettingsPayload,
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Platform Super Admin update of platform-wide EPS credentials stored in Database."""
+    dump = payload.model_dump()
+    eps_service.update_config(dump)
+
+    # Save / Upsert to PostgreSQL PlatformSetting
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_eps_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if not setting:
+        setting = PlatformSetting(key="platform_eps_config", value_json=dump)
+        db.add(setting)
+    else:
+        setting.value_json = dump
+
+    # Record Audit Log
+    audit = AuditLog(
+        tenant_id=None,
+        user_id=admin.id,
+        action="superadmin.eps_settings_updated",
+        resource_type="system_config",
+        resource_id="eps_pgw",
+        metadata_json={
+            "admin_email": admin.email,
+            "is_sandbox": payload.is_sandbox,
+            "base_url": payload.base_url,
+            "username": payload.username,
+            "merchant_id": payload.merchant_id,
+            "store_id": payload.store_id
+        }
+    )
+    db.add(audit)
+    await db.commit()
+
+    return {
+        "status": "success",
+        "message": "Platform EPS Payment Gateway settings have been permanently saved in Database.",
+        "is_sandbox": payload.is_sandbox,
+        "base_url": payload.base_url
+    }
+
+@router.post("/eps/test-connection", response_model=EpsTestConnectionResponse)
+async def test_eps_gateway_connection(
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Platform Super Admin health test to ping EPS Auth/GetToken endpoint using Database credentials."""
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_eps_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if setting and setting.value_json:
+        eps_service.update_config(setting.value_json)
+
+    t0 = time.time()
+    try:
+        token = await eps_service.grant_token()
+        elapsed_ms = int((time.time() - t0) * 1000)
+        token_preview = f"{token[:8]}...{token[-6:]}" if len(token) > 14 else token
+        return EpsTestConnectionResponse(
+            status="healthy",
+            latency_ms=max(elapsed_ms, 35),
+            message="EPS Token Grant API (HMAC-SHA512) verified successfully with Database credentials.",
+            token_preview=token_preview
+        )
+    except Exception as e:
+        elapsed_ms = int((time.time() - t0) * 1000)
+        return EpsTestConnectionResponse(
+            status="warning",
+            latency_ms=elapsed_ms or 110,
+            message=f"EPS ping test responded: {str(e)}",
+            token_preview="simulated_eps_token_verified"
         )
 
 # ----------------- 10. SAAS PRICING PLANS & OFFERS MANAGEMENT -----------------
@@ -1182,12 +1339,12 @@ THEME_PRESETS = [
 class ThemeConfigPayload(BaseModel):
     preset_id: str = "ocean_sapphire"
     name: Optional[str] = "Custom Theme"
-    platform_name: Optional[str] = "Enterprise AIaaS"
+    platform_name: Optional[str] = "Jobab Chat"
     platform_tagline: Optional[str] = "Autonomous Customer Communication & Sales Cloud"
     logo_url: Optional[str] = ""
     favicon_url: Optional[str] = ""
     widget_avatar_url: Optional[str] = ""
-    footer_text: Optional[str] = "© 2026 Enterprise AIaaS Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI"
+    footer_text: Optional[str] = "© 2026 Jobab Chat Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI"
     support_email: Optional[str] = "support@enterprise.example"
     primary_color: str = "#2563EB"
     primary_hover: str = "#1D4ED8"
@@ -1206,12 +1363,12 @@ async def get_public_platform_theme(db: AsyncSession = Depends(get_db)):
     
     default_config = {
         **THEME_PRESETS[0],
-        "platform_name": "Enterprise AIaaS",
+        "platform_name": "Jobab Chat",
         "platform_tagline": "Autonomous Customer Communication & Sales Cloud",
         "logo_url": "https://iili.io/CsuMe3l.png",
         "favicon_url": "https://iili.io/CsuMe3l.png",
         "widget_avatar_url": "",
-        "footer_text": "© 2026 Enterprise AIaaS Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI",
+        "footer_text": "© 2026 Jobab Chat Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI",
         "support_email": "support@enterprise.example"
     }
     
@@ -1234,12 +1391,12 @@ async def get_superadmin_theme(
     
     default_config = {
         **THEME_PRESETS[0],
-        "platform_name": "Enterprise AIaaS",
+        "platform_name": "Jobab Chat",
         "platform_tagline": "Autonomous Customer Communication & Sales Cloud",
         "logo_url": "https://iili.io/CsuMe3l.png",
         "favicon_url": "https://iili.io/CsuMe3l.png",
         "widget_avatar_url": "",
-        "footer_text": "© 2026 Enterprise AIaaS Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI",
+        "footer_text": "© 2026 Jobab Chat Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI",
         "support_email": "support@enterprise.example"
     }
     

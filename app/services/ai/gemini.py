@@ -123,12 +123,15 @@ class GeminiService:
     - Token metering & latency calculation
     """
 
+    _models_cache: Dict[str, Any] = {"timestamp": 0, "data": []}
+
     def __init__(self, api_key: Optional[str] = None):
-        self.ai_base_url = (settings.AI_BASE_URL or os.environ.get("AI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")).rstrip("/")
-        self.api_key = api_key or settings.AI_API_KEY or settings.GEMINI_API_KEY or os.environ.get("AI_API_KEY", "sk-gemini")
-        self.model = settings.AI_MODEL or settings.DEFAULT_GEMINI_MODEL or "gemini-2.5-flash"
-        self.fallback_model = "gemini-1.5-flash"
-        self.embedding_model = "text-embedding-004"
+        # Default to OpenRouter API Gateway
+        self.ai_base_url = (getattr(settings, "AI_BASE_URL", None) or os.environ.get("AI_BASE_URL", "https://openrouter.ai/api/v1")).rstrip("/")
+        self.api_key = api_key or getattr(settings, "AI_API_KEY", None) or getattr(settings, "GEMINI_API_KEY", None) or os.environ.get("AI_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
+        self.model = getattr(settings, "AI_MODEL", None) or getattr(settings, "DEFAULT_GEMINI_MODEL", None) or "google/gemini-2.5-flash"
+        self.fallback_model = "google/gemini-2.5-flash-lite"
+        self.embedding_model = getattr(settings, "DEFAULT_EMBEDDING_MODEL", "text-embedding-004")
         self.temperature = 0.3
         self.max_tokens = 2048
         self.rate_limit_rpm = 120
@@ -138,13 +141,87 @@ class GeminiService:
 
     def _rebuild_client(self):
         if self.ai_base_url and self.api_key:
+            headers = {}
+            if "openrouter.ai" in self.ai_base_url:
+                headers["HTTP-Referer"] = "https://jobab.chat"
+                headers["X-Title"] = "Jobab Chat Enterprise"
+
             self.client = AsyncOpenAI(
                 base_url=self.ai_base_url,
-                api_key=self.api_key or "sk-gemini",
+                api_key=self.api_key or "sk-or-v1-default",
+                default_headers=headers if headers else None,
                 timeout=45.0
             )
         else:
             self.client = None
+
+    async def fetch_openrouter_models(self, query: str = "", provider: str = "", tools_only: bool = False) -> List[Dict[str, Any]]:
+        """Fetches real-time model catalog and pricing directly from OpenRouter API with 5-minute caching."""
+        import httpx
+        now = time.time()
+        if not GeminiService._models_cache.get("data") or (now - GeminiService._models_cache.get("timestamp", 0) > 300):
+            try:
+                headers = {}
+                if self.api_key:
+                    headers["Authorization"] = f"Bearer {self.api_key}"
+                async with httpx.AsyncClient(timeout=10.0) as http_client:
+                    res = await http_client.get("https://openrouter.ai/api/v1/models", headers=headers)
+                    if res.status_code == 200:
+                        raw_models = res.json().get("data", [])
+                        parsed = []
+                        for m in raw_models:
+                            pricing = m.get("pricing", {})
+                            p_prompt = float(pricing.get("prompt", 0) or 0)
+                            p_compl = float(pricing.get("completion", 0) or 0)
+                            
+                            prompt_per_1m = p_prompt * 1_000_000
+                            compl_per_1m = p_compl * 1_000_000
+                            
+                            is_free = (prompt_per_1m == 0 and compl_per_1m == 0) or ":free" in m.get("id", "")
+                            supported_params = m.get("supported_parameters", []) or []
+                            supports_tools = "tools" in supported_params or "tool_choice" in supported_params
+                            
+                            m_id = m.get("id", "")
+                            m_provider = m_id.split("/")[0] if "/" in m_id else "other"
+                            
+                            parsed.append({
+                                "id": m_id,
+                                "name": m.get("name") or m_id,
+                                "description": m.get("description", ""),
+                                "context_length": m.get("context_length", 4096),
+                                "provider": m_provider,
+                                "pricing_prompt": f"${prompt_per_1m:.3f} / 1M" if not is_free else "100% Free",
+                                "pricing_completion": f"${compl_per_1m:.3f} / 1M" if not is_free else "100% Free",
+                                "prompt_price_num": prompt_per_1m,
+                                "completion_price_num": compl_per_1m,
+                                "is_free": is_free,
+                                "supports_tools": supports_tools
+                            })
+                        GeminiService._models_cache = {"timestamp": now, "data": parsed}
+            except Exception as e:
+                print("OpenRouter models fetch warning:", e)
+
+        models = GeminiService._models_cache.get("data", [])
+        
+        filtered = []
+        q = (query or "").lower().strip()
+        p = (provider or "").lower().strip()
+        
+        for m in models:
+            if tools_only and not m["supports_tools"]:
+                continue
+            if p and p != "all":
+                if p == "free":
+                    if not m["is_free"]:
+                        continue
+                elif p not in m["provider"].lower() and p not in m["id"].lower():
+                    continue
+            if q:
+                if q not in m["id"].lower() and q not in m["name"].lower() and q not in m["description"].lower():
+                    continue
+            filtered.append(m)
+            
+        return filtered
 
     def get_config(self) -> Dict[str, Any]:
         """Returns the active AI configuration and available model catalog."""
@@ -163,11 +240,16 @@ class GeminiService:
             "system_prompt_prefix": self.system_prompt_prefix,
             "status": "Operational — High Throughput" if bool(self.api_key) else "API Key Required",
             "available_models": [
-                "gemini-2.5-flash",
-                "gemini-2.0-flash",
-                "gemini-1.5-flash",
-                "gemini-1.5-pro",
-                "gemini-3.6-flash"
+                "google/gemini-2.5-flash",
+                "google/gemini-2.5-pro",
+                "google/gemini-2.5-flash-lite",
+                "google/gemini-3.7-flash",
+                "deepseek/deepseek-chat",
+                "openai/gpt-4o-mini",
+                "openai/gpt-4o",
+                "anthropic/claude-3.5-haiku",
+                "anthropic/claude-3.5-sonnet",
+                "meta-llama/llama-3.3-70b-instruct"
             ]
         }
 

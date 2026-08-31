@@ -230,6 +230,7 @@ async def get_ecommerce_settings(
 
     settings = tenant.ecommerce_settings or {}
     bkash_cfg = settings.get("bkash", {})
+    eps_cfg = settings.get("eps", {})
     sms_cfg = settings.get("sms", {})
 
     app_key = bkash_cfg.get("app_key", "")
@@ -241,6 +242,12 @@ async def get_ecommerce_settings(
     sms_key = sms_cfg.get("api_key", "")
     masked_sms_key = f"{sms_key[:4]}...{sms_key[-4:]}" if len(sms_key) > 8 else ("Configured" if sms_key else None)
 
+    eps_m_id = eps_cfg.get("merchant_id", "")
+    masked_eps_m_id = f"{eps_m_id[:4]}...{eps_m_id[-4:]}" if len(eps_m_id) > 8 else ("Configured" if eps_m_id else None)
+
+    eps_s_id = eps_cfg.get("store_id", "")
+    masked_eps_s_id = f"{eps_s_id[:4]}...{eps_s_id[-4:]}" if len(eps_s_id) > 8 else ("Configured" if eps_s_id else None)
+
     return {
         "business_category": tenant.business_category or "ecommerce",
         "cod_enabled": settings.get("cod_enabled", True),
@@ -249,6 +256,13 @@ async def get_ecommerce_settings(
         "bkash_base_url": bkash_cfg.get("base_url", "https://tokenized.sandbox.bka.sh/v1.2.0-beta"),
         "bkash_app_key_masked": masked_app_key,
         "bkash_username_masked": bkash_cfg.get("username"),
+        "eps_enabled": eps_cfg.get("enabled", False),
+        "eps_is_sandbox": eps_cfg.get("is_sandbox", True),
+        "eps_base_url": eps_cfg.get("base_url", "https://sandboxpgapi.eps.com.bd"),
+        "eps_username_masked": eps_cfg.get("username"),
+        "eps_merchant_id_masked": masked_eps_m_id,
+        "eps_store_id_masked": masked_eps_s_id,
+        "eps_merchant_number": eps_cfg.get("merchant_number"),
         "delivery_charge_inside_dhaka": settings.get("delivery_charge_inside_dhaka", 60.0),
         "delivery_charge_outside_dhaka": settings.get("delivery_charge_outside_dhaka", 120.0),
         "sms_notifications_enabled": sms_cfg.get("enabled", True),
@@ -266,6 +280,7 @@ async def update_ecommerce_settings(
 ):
     settings = dict(tenant.ecommerce_settings or {})
     bkash_cfg = dict(settings.get("bkash", {}))
+    eps_cfg = dict(settings.get("eps", {}))
     sms_cfg = dict(settings.get("sms", {}))
 
     if data.business_category is not None:
@@ -279,7 +294,7 @@ async def update_ecommerce_settings(
     if data.sms_order_template is not None:
         settings["sms_order_template"] = data.sms_order_template
 
-    # bKash Settings
+    # Tenant-Scoped bKash Settings
     if data.bkash_enabled is not None:
         bkash_cfg["enabled"] = data.bkash_enabled
     if data.bkash_is_sandbox is not None:
@@ -295,6 +310,26 @@ async def update_ecommerce_settings(
     if data.bkash_password:
         bkash_cfg["encrypted_password"] = encrypt_secret(data.bkash_password)
 
+    # Tenant-Scoped EPS Settings
+    if data.eps_enabled is not None:
+        eps_cfg["enabled"] = data.eps_enabled
+    if data.eps_is_sandbox is not None:
+        eps_cfg["is_sandbox"] = data.eps_is_sandbox
+    if data.eps_base_url is not None:
+        eps_cfg["base_url"] = data.eps_base_url
+    if data.eps_username is not None:
+        eps_cfg["username"] = data.eps_username
+    if data.eps_merchant_id is not None:
+        eps_cfg["merchant_id"] = data.eps_merchant_id
+    if data.eps_store_id is not None:
+        eps_cfg["store_id"] = data.eps_store_id
+    if data.eps_merchant_number is not None:
+        eps_cfg["merchant_number"] = data.eps_merchant_number
+    if data.eps_password:
+        eps_cfg["encrypted_password"] = encrypt_secret(data.eps_password)
+    if data.eps_hash_key:
+        eps_cfg["encrypted_hash_key"] = encrypt_secret(data.eps_hash_key)
+
     # SMS Settings
     if data.sms_notifications_enabled is not None:
         sms_cfg["enabled"] = data.sms_notifications_enabled
@@ -306,6 +341,7 @@ async def update_ecommerce_settings(
         sms_cfg["api_key"] = data.sms_api_key
 
     settings["bkash"] = bkash_cfg
+    settings["eps"] = eps_cfg
     settings["sms"] = sms_cfg
     tenant.ecommerce_settings = settings
 
@@ -318,6 +354,12 @@ async def update_ecommerce_settings(
     sms_key = sms_cfg.get("api_key", "")
     masked_sms_key = f"{sms_key[:4]}...{sms_key[-4:]}" if len(sms_key) > 8 else ("Configured" if sms_key else None)
 
+    eps_m_id = eps_cfg.get("merchant_id", "")
+    masked_eps_m_id = f"{eps_m_id[:4]}...{eps_m_id[-4:]}" if len(eps_m_id) > 8 else ("Configured" if eps_m_id else None)
+
+    eps_s_id = eps_cfg.get("store_id", "")
+    masked_eps_s_id = f"{eps_s_id[:4]}...{eps_s_id[-4:]}" if len(eps_s_id) > 8 else ("Configured" if eps_s_id else None)
+
     return {
         "business_category": tenant.business_category or "ecommerce",
         "cod_enabled": settings.get("cod_enabled", True),
@@ -326,6 +368,13 @@ async def update_ecommerce_settings(
         "bkash_base_url": bkash_cfg.get("base_url", "https://tokenized.sandbox.bka.sh/v1.2.0-beta"),
         "bkash_app_key_masked": masked_app_key,
         "bkash_username_masked": bkash_cfg.get("username"),
+        "eps_enabled": eps_cfg.get("enabled", False),
+        "eps_is_sandbox": eps_cfg.get("is_sandbox", True),
+        "eps_base_url": eps_cfg.get("base_url", "https://sandboxpgapi.eps.com.bd"),
+        "eps_username_masked": eps_cfg.get("username"),
+        "eps_merchant_id_masked": masked_eps_m_id,
+        "eps_store_id_masked": masked_eps_s_id,
+        "eps_merchant_number": eps_cfg.get("merchant_number"),
         "delivery_charge_inside_dhaka": settings.get("delivery_charge_inside_dhaka", 60.0),
         "delivery_charge_outside_dhaka": settings.get("delivery_charge_outside_dhaka", 120.0),
         "sms_notifications_enabled": sms_cfg.get("enabled", True),

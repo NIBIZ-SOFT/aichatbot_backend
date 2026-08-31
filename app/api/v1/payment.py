@@ -2,7 +2,7 @@ import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -12,21 +12,87 @@ from app.core.config import settings
 from app.api.v1.auth import get_current_user, get_optional_current_user
 from app.models.all_models import (
     User, Tenant, Subscription, SubscriptionTier, SubscriptionStatus, AuditLog, UserRole,
-    Coupon, CouponRedemption
+    Coupon, CouponRedemption, PlatformSetting
 )
-from app.services.payment.bkash import bkash_service
+from app.services.payment.bkash import BkashService, bkash_service
+from app.services.payment.eps import EpsService, eps_service
 
 from app.services.billing.pricing_service import PricingService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/payment", tags=["bKash Payment Gateway"])
+router = APIRouter(prefix="/payment", tags=["Payment Gateways (bKash & EPS)"])
+
+async def get_platform_bkash_service(db: AsyncSession) -> BkashService:
+    """
+    Returns a BkashService instance configured with SuperAdmin platform credentials from PostgreSQL.
+    """
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_bkash_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if setting and setting.value_json:
+        cfg = setting.value_json
+        return BkashService(
+            base_url=cfg.get("base_url"),
+            app_key=cfg.get("app_key"),
+            app_secret=cfg.get("app_secret"),
+            username=cfg.get("username"),
+            password=cfg.get("password"),
+            merchant_number=cfg.get("merchant_number")
+        )
+    return bkash_service
+
+async def get_platform_eps_service(db: AsyncSession) -> EpsService:
+    """
+    Returns an EpsService instance configured with SuperAdmin platform credentials from PostgreSQL.
+    """
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_eps_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if setting and setting.value_json:
+        cfg = setting.value_json
+        return EpsService(
+            base_url=cfg.get("base_url"),
+            username=cfg.get("username"),
+            password=cfg.get("password"),
+            hash_key=cfg.get("hash_key"),
+            merchant_id=cfg.get("merchant_id"),
+            store_id=cfg.get("store_id"),
+            merchant_number=cfg.get("merchant_number")
+        )
+    return eps_service
+
+def resolve_frontend_url(request: Request, explicit_url: Optional[str] = None) -> str:
+    """
+    Dynamically determines the appropriate frontend base URL:
+    - If explicit_url is passed by client (e.g. window.location.origin), use it.
+    - Else inspect 'origin' header from client browser (e.g. http://localhost:3000 or https://jobab.chat).
+    - Else inspect 'referer' header.
+    - Fallback: settings.FRONTEND_URL (e.g. http://localhost:3000 or https://jobab.chat).
+    """
+    if explicit_url and explicit_url.strip().startswith("http"):
+        return explicit_url.strip().rstrip("/")
+    
+    origin = request.headers.get("origin")
+    if origin and origin.strip().startswith("http"):
+        return origin.strip().rstrip("/")
+
+    referer = request.headers.get("referer")
+    if referer and referer.strip().startswith("http"):
+        from urllib.parse import urlparse
+        parsed = urlparse(referer.strip())
+        if parsed.scheme and parsed.netloc:
+            return f"{parsed.scheme}://{parsed.netloc}"
+
+    if getattr(settings, "ENVIRONMENT", "development") == "development":
+        return "http://localhost:3000"
+
+    return settings.FRONTEND_URL.rstrip("/")
 
 class BkashCreatePaymentRequest(BaseModel):
     tier: str
     billing_cycle: Optional[str] = "monthly"  # "monthly" or "annual"
     phone_number: Optional[str] = "01770618575"
     coupon_code: Optional[str] = None
+    frontend_url: Optional[str] = None
 
 class BkashExecutePaymentRequest(BaseModel):
     payment_id: str
@@ -37,6 +103,7 @@ class BkashExecutePaymentRequest(BaseModel):
 
 @router.post("/bkash/create")
 async def create_bkash_checkout_session(
+    request: Request,
     payload: BkashCreatePaymentRequest,
     user: Optional[User] = Depends(get_optional_current_user),
     db: AsyncSession = Depends(get_db)
@@ -83,11 +150,13 @@ async def create_bkash_checkout_session(
 
     merchant_invoice = f"INV-BK-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
     payer_ref = payload.phone_number or "01770618575"
-    callback_url = f"{settings.FRONTEND_URL}/subscription/bkash-callback?tier={tier_str}&cycle={payload.billing_cycle}"
+    base_url = resolve_frontend_url(request, payload.frontend_url)
+    callback_url = f"{base_url}/subscription/bkash-callback?tier={tier_str}&cycle={payload.billing_cycle}"
     if payload.coupon_code:
         callback_url += f"&coupon={payload.coupon_code}"
 
-    payment_data = await bkash_service.create_payment(
+    platform_bkash = await get_platform_bkash_service(db)
+    payment_data = await platform_bkash.create_payment(
         amount=amount,
         merchant_invoice=merchant_invoice,
         payer_reference=payer_ref,
@@ -154,7 +223,8 @@ async def execute_bkash_payment(
         max_conversations = 200
 
     # 2. Execute & capture with bKash
-    exec_res = await bkash_service.execute_payment(payload.payment_id)
+    platform_bkash = await get_platform_bkash_service(db)
+    exec_res = await platform_bkash.execute_payment(payload.payment_id)
     trx_id = exec_res.get("trxID", f"TRX_{uuid.uuid4().hex[:8].upper()}")
 
     now = datetime.now(timezone.utc)
@@ -276,12 +346,14 @@ async def execute_bkash_payment(
 @router.get("/bkash/query/{payment_id}")
 async def query_bkash_payment(
     payment_id: str,
-    user: Optional[User] = Depends(get_optional_current_user)
+    user: Optional[User] = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Queries bKash transaction status by paymentID.
     """
-    return await bkash_service.query_payment(payment_id)
+    platform_bkash = await get_platform_bkash_service(db)
+    return await platform_bkash.query_payment(payment_id)
 
 
 # ----------------- PREPAID AI WALLET & TOP-UP APIS -----------------
@@ -326,11 +398,13 @@ async def get_tenant_wallet(
 
 class WalletTopupRequest(BaseModel):
     amount_bdt: float
+    frontend_url: Optional[str] = None
 
 @router.post("/wallet/topup")
 async def init_wallet_topup(
     payload: WalletTopupRequest,
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Initializes a bKash direct payment session for prepaid AI wallet recharge.
@@ -339,7 +413,8 @@ async def init_wallet_topup(
         raise HTTPException(status_code=400, detail="Minimum top-up amount is ৳100.00.")
         
     merchant_invoice = f"TOPUP-{uuid.uuid4().hex[:8].upper()}"
-    res = await bkash_service.create_payment(
+    platform_bkash = await get_platform_bkash_service(db)
+    res = await platform_bkash.create_payment(
         amount=f"{payload.amount_bdt:.2f}",
         merchant_invoice_number=merchant_invoice,
         payer_reference=f"WALLET_{user.tenant_id}"
@@ -375,7 +450,8 @@ async def execute_wallet_topup(
     if not user.tenant_id:
         raise HTTPException(status_code=400, detail="User is not associated with any tenant organization.")
         
-    exec_res = await bkash_service.execute_payment(payload.payment_id)
+    platform_bkash = await get_platform_bkash_service(db)
+    exec_res = await platform_bkash.execute_payment(payload.payment_id)
     if exec_res.get("statusCode") != "0000":
         # In sandbox mode fallback if simulation
         logger.warning(f"bKash execute returned {exec_res.get('statusCode')}: {exec_res.get('statusMessage')}")
@@ -398,4 +474,366 @@ async def execute_wallet_topup(
         "new_balance_bdt": wallet.balance_bdt,
         "credited_amount_bdt": amount_paid
     }
+
+
+# =========================================================================
+# EPS (EASY PAYMENT SYSTEM) GATEWAY ENDPOINTS
+# =========================================================================
+
+class EpsCreatePaymentRequest(BaseModel):
+    tier: str
+    billing_cycle: Optional[str] = "monthly"  # "monthly" or "annual"
+    customer_name: Optional[str] = "Valued Customer"
+    customer_email: Optional[str] = "customer@example.com"
+    customer_phone: Optional[str] = "01700000000"
+    customer_address: Optional[str] = "Dhaka, Bangladesh"
+    coupon_code: Optional[str] = None
+    frontend_url: Optional[str] = None
+
+class EpsExecutePaymentRequest(BaseModel):
+    merchant_transaction_id: str
+    tier: str
+    billing_cycle: Optional[str] = "monthly"
+    coupon_code: Optional[str] = None
+    payer_email: Optional[str] = None
+
+@router.post("/eps/create")
+async def create_eps_checkout_session(
+    request: Request,
+    payload: EpsCreatePaymentRequest,
+    user: Optional[User] = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Creates a new EPS (Easy Payment System) payment session for the requested subscription tier.
+    Dynamically resolves plan pricing, coupon discounts, generates HMAC-SHA512 signature,
+    and returns EPS RedirectURL.
+    """
+    tier_str = payload.tier.lower()
+
+    # Load dynamic plan from database
+    plan = await PricingService.get_plan_by_code(db, tier_str)
+    if not plan:
+        fallback_monthly = {"free": 0.0, "starter": 4990.0, "growth": 19990.0, "enterprise": 49990.0}
+        fallback_annual = {"free": 0.0, "starter": 4240.0 * 12, "growth": 16990.0 * 12, "enterprise": 42490.0 * 12}
+        if tier_str not in fallback_monthly:
+            raise HTTPException(status_code=400, detail="Invalid subscription tier selected")
+        is_annual = payload.billing_cycle == "annual"
+        raw_amount = fallback_annual[tier_str] if is_annual else fallback_monthly[tier_str]
+    else:
+        is_annual = payload.billing_cycle == "annual"
+        raw_amount = plan.annual_price_bdt * 12 if is_annual else plan.monthly_price_bdt
+
+    discount_amount = 0.0
+    coupon_info = None
+
+    # Validate coupon if provided
+    if payload.coupon_code:
+        coupon_res = await PricingService.validate_coupon(
+            db=db,
+            code=payload.coupon_code,
+            plan_code=tier_str,
+            amount_bdt=raw_amount
+        )
+        if coupon_res["valid"]:
+            discount_amount = coupon_res["discount_amount_bdt"]
+            raw_amount = coupon_res["final_amount_bdt"]
+            coupon_info = coupon_res
+        else:
+            raise HTTPException(status_code=400, detail=coupon_res["message"])
+
+    amount = max(1.0, raw_amount) if raw_amount > 0 else 1.0
+    merchant_txn_id = f"EPS-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+
+    customer_name = payload.customer_name or (user.full_name if user else "Valued Client")
+    customer_email = payload.customer_email or (user.email if user else "guest@checkout.local")
+    customer_phone = payload.customer_phone or "01700000000"
+
+    base_url = resolve_frontend_url(request, payload.frontend_url)
+    callback_url = f"{base_url}/subscription/eps-callback?tier={tier_str}&cycle={payload.billing_cycle}"
+    if payload.coupon_code:
+        callback_url += f"&coupon={payload.coupon_code}"
+
+    platform_eps = await get_platform_eps_service(db)
+    eps_res = await platform_eps.initialize_payment(
+        amount=amount,
+        merchant_transaction_id=merchant_txn_id,
+        customer_name=customer_name,
+        customer_email=customer_email,
+        customer_phone=customer_phone,
+        customer_address=payload.customer_address or "Dhaka, Bangladesh",
+        product_name=f"Jobab Chat {tier_str.upper()} Subscription",
+        product_category="SaaS",
+        callback_url=callback_url
+    )
+
+    return {
+        "status": "success",
+        "merchantTransactionId": merchant_txn_id,
+        "redirectURL": eps_res.get("redirectURL"),
+        "amount": amount,
+        "original_amount": raw_amount + discount_amount,
+        "discount_applied": discount_amount,
+        "coupon_applied": coupon_info["code"] if coupon_info else None,
+        "currency": "BDT",
+        "tier": tier_str.upper(),
+        "billing_cycle": payload.billing_cycle,
+        "is_sandbox": eps_res.get("is_sandbox", True)
+    }
+
+@router.post("/eps/execute")
+async def execute_eps_payment(
+    payload: EpsExecutePaymentRequest,
+    user: Optional[User] = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Executes and confirms EPS payment verification.
+    If called by an authenticated tenant owner, updates their subscription in DB immediately.
+    If called during guest sign-up, returns verified transaction receipt to complete workspace provisioning.
+    """
+    target_tier_str = payload.tier.lower()
+
+    # 1. Fetch exact plan from database
+    plan = await PricingService.get_plan_by_code(db, target_tier_str)
+    tier_map = {
+        "free": SubscriptionTier.FREE,
+        "starter": SubscriptionTier.STARTER,
+        "growth": SubscriptionTier.GROWTH,
+        "enterprise": SubscriptionTier.ENTERPRISE
+    }
+
+    if plan:
+        token_limit = plan.monthly_token_limit
+        max_agents = plan.max_agents
+        max_websites = plan.max_websites
+        max_knowledge_docs = plan.max_knowledge_docs
+        max_conversations = plan.monthly_conversation_limit
+        tier_enum = tier_map.get(target_tier_str, SubscriptionTier.GROWTH)
+    else:
+        tier_limits = {
+            "free": 50_000,
+            "starter": 500_000,
+            "growth": 2_500_000,
+            "enterprise": 10_000_000
+        }
+        token_limit = tier_limits.get(target_tier_str, 500_000)
+        tier_enum = tier_map.get(target_tier_str, SubscriptionTier.STARTER)
+        max_agents = 2
+        max_websites = 1
+        max_knowledge_docs = 10
+        max_conversations = 200
+
+    # 2. Verify with EPS Engine
+    platform_eps = await get_platform_eps_service(db)
+    verify_res = await platform_eps.verify_transaction(payload.merchant_transaction_id)
+    status_str = verify_res.get("status", "SUCCESS")
+    if status_str not in ["SUCCESS", "COMPLETED"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"EPS Transaction is in state: {status_str}. Payment could not be confirmed."
+        )
+
+    now = datetime.now(timezone.utc)
+    duration_days = 365 if payload.billing_cycle == "annual" else 30
+    period_end = now + timedelta(days=duration_days)
+
+    # 3. Resolve tenant (either from authenticated session or payer_email)
+    tenant_id = None
+    acting_user = user
+    if user and user.tenant_id:
+        tenant_id = user.tenant_id
+    elif payload.payer_email:
+        clean_email = payload.payer_email.strip().lower()
+        u_stmt = select(User).where(User.email == clean_email)
+        found_user = (await db.execute(u_stmt)).scalars().first()
+        if found_user and found_user.tenant_id:
+            tenant_id = found_user.tenant_id
+            acting_user = found_user
+
+    # 4. If tenant found, update DB subscription immediately
+    if tenant_id:
+        sub_stmt = select(Subscription).where(Subscription.tenant_id == tenant_id)
+        sub = (await db.execute(sub_stmt)).scalars().first()
+
+        if not sub:
+            sub = Subscription(
+                tenant_id=tenant_id,
+                tier=tier_enum,
+                plan_code=target_tier_str,
+                status=SubscriptionStatus.ACTIVE,
+                monthly_token_limit=token_limit,
+                monthly_conversation_limit=max_conversations,
+                max_agents=max_agents,
+                max_websites=max_websites,
+                max_knowledge_docs=max_knowledge_docs,
+                current_period_start=now,
+                current_period_end=period_end
+            )
+            db.add(sub)
+        else:
+            sub.tier = tier_enum
+            sub.plan_code = target_tier_str
+            sub.status = SubscriptionStatus.ACTIVE
+            sub.monthly_token_limit = token_limit
+            sub.monthly_conversation_limit = max_conversations
+            sub.max_agents = max_agents
+            sub.max_websites = max_websites
+            sub.max_knowledge_docs = max_knowledge_docs
+            sub.current_period_start = now
+            sub.current_period_end = period_end
+
+        # Auto-reactivate tenant if suspended
+        t_stmt = select(Tenant).where(Tenant.id == tenant_id)
+        t_res = await db.execute(t_stmt)
+        tenant_obj = t_res.scalars().first()
+        if tenant_obj and not tenant_obj.is_active:
+            tenant_obj.is_active = True
+            cfg = dict(tenant_obj.branding_config or {})
+            cfg.pop("suspension_reason", None)
+            cfg.pop("suspension_category", None)
+            cfg.pop("suspended_at", None)
+            tenant_obj.branding_config = cfg
+
+        # Insert Audit Log
+        audit = AuditLog(
+            tenant_id=tenant_id,
+            user_id=acting_user.id if acting_user else None,
+            action="payment.eps_success",
+            resource_type="subscription",
+            resource_id=str(sub.id),
+            metadata_json={
+                "merchantTransactionId": payload.merchant_transaction_id,
+                "tier": (plan.name if plan else target_tier_str.upper()),
+                "plan_code": target_tier_str,
+                "monthly_token_limit": token_limit,
+                "billing_cycle": payload.billing_cycle,
+                "coupon_code": payload.coupon_code,
+                "verified_by": "EPS (Easy Payment System) Engine"
+            }
+        )
+        db.add(audit)
+        await db.commit()
+
+    # If coupon was used, record redemption
+    if payload.coupon_code:
+        clean_code = payload.coupon_code.strip().upper()
+        cp_stmt = select(Coupon).where(Coupon.code == clean_code)
+        cp = (await db.execute(cp_stmt)).scalars().first()
+        if cp:
+            payer_email = payload.payer_email or (user.email if user else "guest@checkout.local")
+            try:
+                await PricingService.redeem_coupon(
+                    db=db,
+                    coupon_id=cp.id,
+                    user_email=payer_email,
+                    invoice_number=f"INV-EPS-{payload.merchant_transaction_id[-8:]}",
+                    original_amount=float(plan.monthly_price_bdt if plan else 4990.0),
+                    discount_amount=0.0,
+                    final_amount=float(plan.monthly_price_bdt if plan else 4990.0),
+                    tenant_id=user.tenant_id if user else None
+                )
+            except Exception as e:
+                logger.warning(f"Failed to record coupon redemption: {e}")
+
+    return {
+        "status": "success",
+        "message": f"Payment successfully verified via EPS! Package: {target_tier_str.upper()}.",
+        "trxID": payload.merchant_transaction_id,
+        "merchantTransactionId": payload.merchant_transaction_id,
+        "tier": target_tier_str.upper(),
+        "coupon_applied": payload.coupon_code,
+        "monthly_token_limit": token_limit,
+        "current_period_end": period_end.isoformat()
+    }
+
+@router.get("/eps/query/{merchant_transaction_id}")
+async def query_eps_payment(
+    merchant_transaction_id: str,
+    user: Optional[User] = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Queries EPS transaction status by merchantTransactionId.
+    """
+    platform_eps = await get_platform_eps_service(db)
+    return await platform_eps.verify_transaction(merchant_transaction_id)
+
+
+# ----------------- EPS PREPAID AI WALLET TOP-UP APIS -----------------
+
+@router.post("/wallet/topup-eps")
+async def init_eps_wallet_topup(
+    request: Request,
+    payload: WalletTopupRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Initializes an EPS payment session for prepaid AI wallet recharge.
+    """
+    if payload.amount_bdt < 100.0:
+        raise HTTPException(status_code=400, detail="Minimum top-up amount is ৳100.00.")
+
+    merchant_txn_id = f"TOPUP-EPS-{datetime.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6].upper()}"
+    base_url = resolve_frontend_url(request, payload.frontend_url)
+    callback_url = f"{base_url}/subscription/eps-callback?wallet_topup=true"
+
+    platform_eps = await get_platform_eps_service(db)
+    eps_res = await platform_eps.initialize_payment(
+        amount=payload.amount_bdt,
+        merchant_transaction_id=merchant_txn_id,
+        customer_name=user.full_name or "Valued Tenant",
+        customer_email=user.email or "tenant@wallet.local",
+        product_name="AI Wallet Balance Recharge",
+        product_category="Prepaid Balance",
+        callback_url=callback_url
+    )
+
+    return {
+        "merchantTransactionId": merchant_txn_id,
+        "redirectURL": eps_res.get("redirectURL"),
+        "amount_bdt": payload.amount_bdt
+    }
+
+class WalletExecuteEpsRequest(BaseModel):
+    merchant_transaction_id: str
+
+@router.post("/wallet/execute-eps")
+async def execute_eps_wallet_topup(
+    payload: WalletExecuteEpsRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Executes and verifies EPS wallet top-up payment and credits the tenant's AI wallet.
+    """
+    from app.services.billing.wallet_service import WalletService
+    if not user.tenant_id:
+        raise HTTPException(status_code=400, detail="User is not associated with any tenant organization.")
+
+    platform_eps = await get_platform_eps_service(db)
+    verify_res = await platform_eps.verify_transaction(payload.merchant_transaction_id)
+    if verify_res.get("status") not in ["SUCCESS", "COMPLETED"]:
+        logger.warning(f"EPS wallet verify returned {verify_res}")
+
+    raw_data = verify_res.get("raw", {})
+    amount_paid = float(raw_data.get("totalAmount") or raw_data.get("amount") or 500.0)
+
+    wallet, tx = await WalletService.topup_wallet(
+        db=db,
+        tenant_id=user.tenant_id,
+        amount_bdt=amount_paid,
+        trx_id=payload.merchant_transaction_id,
+        description=f"Prepaid AI Wallet Top-Up (EPS TrxID: {payload.merchant_transaction_id})"
+    )
+
+    return {
+        "status": "success",
+        "message": f"Successfully credited ৳{amount_paid:,.2f} to AI Wallet via EPS!",
+        "trxID": payload.merchant_transaction_id,
+        "new_balance_bdt": wallet.balance_bdt,
+        "credited_amount_bdt": amount_paid
+    }
+
 

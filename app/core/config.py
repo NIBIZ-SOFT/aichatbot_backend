@@ -4,7 +4,7 @@ from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Enterprise AIaaS SaaS Platform"
+    PROJECT_NAME: str = "Jobab Chat Enterprise Platform"
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = "super-secret-enterprise-encryption-key-change-in-prod-32bytes!"
     ALGORITHM: str = "HS256"
@@ -28,14 +28,15 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: Optional[str] = None
     REDIS_URL: Optional[str] = None
 
-    # AI Provider Settings (OpenAI-compatible & Gemini)
-    AI_BASE_URL: Optional[str] = "http://4bhgvnanm2jpfo73shwbhcsh.163.227.238.4.sslip.io/v1"
-    AI_API_KEY: Optional[str] = "sk-gemini"
-    AI_MODEL: str = "gemini-3.6-flash"
-
-    # Google Gemini Default Fallback
+    # AI Provider Settings (OpenRouter Universal Gateway)
+    AI_BASE_URL: Optional[str] = "https://openrouter.ai/api/v1"
+    AI_API_KEY: Optional[str] = None
+    AI_MODEL: str = "google/gemini-2.5-flash"
     GEMINI_API_KEY: Optional[str] = None
-    DEFAULT_GEMINI_MODEL: str = "gemini-3.6-flash"
+    OPENAI_API_KEY: Optional[str] = None
+
+    # AI Model Defaults
+    DEFAULT_GEMINI_MODEL: str = "google/gemini-2.5-flash"
     DEFAULT_EMBEDDING_MODEL: str = "text-embedding-004"
 
     # CORS
@@ -44,7 +45,7 @@ class Settings(BaseSettings):
     # Environment
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
-    FRONTEND_URL: str = "https://jobab.chat"
+    FRONTEND_URL: str = "http://localhost:3000"
 
     model_config = {
         "env_file": ".env",

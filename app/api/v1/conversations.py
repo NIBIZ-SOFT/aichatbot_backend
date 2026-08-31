@@ -169,12 +169,17 @@ async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Dep
 
     # Merge website-level overrides with tenant defaults
     w_ecom = widget.ecommerce_config or {}
+    t_bkash_enabled = bool(t_ecom.get("bkash", {}).get("enabled", False))
+    t_eps_enabled = bool(t_ecom.get("eps", {}).get("enabled", False))
+    t_cod_enabled = bool(t_ecom.get("cod_enabled", True))
+
     merged_ecommerce = {
         "enabled": is_ecommerce and w_ecom.get("enabled", True),
         "show_products_carousel": is_ecommerce and w_ecom.get("show_products_carousel", True),
         "allow_instant_checkout": is_ecommerce and w_ecom.get("allow_instant_checkout", True),
-        "cod_enabled": is_ecommerce and w_ecom.get("cod_enabled", t_ecom.get("cod_enabled", True)),
-        "bkash_enabled": is_ecommerce and w_ecom.get("bkash_enabled", t_ecom.get("bkash", {}).get("enabled", False)),
+        "cod_enabled": is_ecommerce and w_ecom.get("cod_enabled", t_cod_enabled),
+        "bkash_enabled": is_ecommerce and w_ecom.get("bkash_enabled", t_bkash_enabled),
+        "eps_enabled": is_ecommerce and w_ecom.get("eps_enabled", t_eps_enabled),
         "delivery_charge_inside_dhaka": float(w_ecom.get("delivery_charge_inside_dhaka", t_ecom.get("delivery_charge_inside_dhaka", 60.0))),
         "delivery_charge_outside_dhaka": float(w_ecom.get("delivery_charge_outside_dhaka", t_ecom.get("delivery_charge_outside_dhaka", 120.0)))
     }
@@ -220,21 +225,22 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
         raise HTTPException(status_code=404, detail="Conversation not initialized")
 
     # 1. Store visitor message
+    msg_text = (payload.content or payload.message or "").strip()
     visitor_msg = Message(
         conversation_id=conversation.id,
         sender_type=SenderType.VISITOR,
         sender_id=payload.visitor_session_id,
-        content=payload.content
+        content=msg_text
     )
     db.add(visitor_msg)
     
     # 2. Check Lead & Sentiment
-    lead_info = AISafetyAndRulesEngine.detect_lead(payload.content)
+    lead_info = AISafetyAndRulesEngine.detect_lead(msg_text)
     if lead_info["is_lead"]:
         conversation.is_lead_detected = True
         conversation.lead_data = lead_info
 
-    sentiment = AISafetyAndRulesEngine.analyze_sentiment(payload.content)
+    sentiment = AISafetyAndRulesEngine.analyze_sentiment(msg_text)
     conversation.last_sentiment_score = sentiment
 
     # 3. Resolve AI Assistant
@@ -246,7 +252,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
 
     # Check Human Handover Triggers
     wants_handover = AISafetyAndRulesEngine.check_human_handover(
-        payload.content, 
+        msg_text, 
         assistant.auto_handover_keywords if assistant else []
     )
     if wants_handover:
@@ -262,7 +268,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
         "sender_type": "visitor",
         "sender_name": conversation.visitor_name or "Website Visitor",
         "visitor_name": conversation.visitor_name or "Website Visitor",
-        "content": payload.content,
+        "content": msg_text,
         "created_at": str(datetime.now(timezone.utc)),
         "website_name": widget.name,
         "is_lead": conversation.is_lead_detected
@@ -308,7 +314,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
         safety_cfg = assistant.safety_settings or {}
         guardrails_cfg = safety_cfg.get("guardrails", {}) if isinstance(safety_cfg, dict) else {}
         is_preflight_off_topic, preflight_reason = AISafetyAndRulesEngine.pre_flight_off_topic_check(
-            user_message=payload.content,
+            user_message=msg_text,
             guardrails_cfg=guardrails_cfg
         )
 
@@ -354,7 +360,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 latency_ms=2,
                 sources_cited=[],
                 metadata_json={
-                    "customer_query": payload.content,
+                    "customer_query": msg_text,
                     "pre_flight_intercepted": True,
                     "interception_reason": preflight_reason,
                     "token_breakdown": {
@@ -396,7 +402,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
         
         # 1. Intent Context Routing & Vector RAG Filtering
         conv_phone = (conversation.visitor_metadata or {}).get("visitor_phone") if conversation.visitor_metadata else None
-        order_num_match = re.search(r'(ORD-\d{8}-\w+)', payload.content, re.IGNORECASE)
+        order_num_match = re.search(r'(ORD-\d{8}-\w+)', msg_text, re.IGNORECASE)
 
         ui_component = None
         rag_chunks = []
@@ -429,7 +435,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 )
         else:
             # POLICY / FAQ / GENERAL KNOWLEDGE: Dynamic Vector RAG search against PostgreSQL 18
-            rag_chunks = await rag_service.search_relevant_chunks(tenant_id=widget.tenant_id, query=payload.content, limit=3)
+            rag_chunks = await rag_service.search_relevant_chunks(tenant_id=widget.tenant_id, query=msg_text, limit=3)
             if rag_chunks:
                 rag_context_blocks = [
                     f"### Knowledge Source: {c.get('source', 'Documentation')} [{c.get('category', 'General')}]\n{c['content']}"
@@ -471,7 +477,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
             ai_res = await gemini.generate_chat_response(
                 system_instruction=rendered_system_prompt,
                 chat_history=formatted_history,
-                user_message=payload.content,
+                user_message=msg_text,
                 rag_context=rag_context,
                 model=assistant.model_name,
                 temperature=assistant.temperature,
@@ -486,7 +492,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 ui_component = await GenerativeUIService.resolve_ui_component(
                     db=db,
                     tenant_id=widget.tenant_id,
-                    user_query=payload.content,
+                    user_query=msg_text,
                     tool_calls=tool_calls,
                     conversation_id=conversation.id,
                     visitor_phone=conv_phone
@@ -497,7 +503,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 ui_component = await GenerativeUIService.resolve_ui_component(
                     db=db,
                     tenant_id=widget.tenant_id,
-                    user_query=payload.content,
+                    user_query=msg_text,
                     ai_response_text=raw_ai_text,
                     rag_chunks=rag_chunks,
                     conversation_id=conversation.id,
@@ -574,7 +580,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 latency_ms=ai_res.get("latency_ms", 0),
                 sources_cited=rag_chunks,
                 metadata_json={
-                    "customer_query": payload.content,
+                    "customer_query": msg_text,
                     "token_breakdown": token_breakdown,
                     "ui_component": ui_component,
                     "cost_usd": ai_res.get("cost_usd", 0.0),
@@ -962,7 +968,7 @@ class PublicDemoChatPayload(BaseModel):
     chat_history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
 
 PLATFORM_DEMO_SYSTEM_PROMPT = """
-You are the Official AI Solution Specialist for this Enterprise AIaaS (AI-as-a-Service) Platform, powered by N.I. BIZ Soft.
+You are the Official AI Solution Specialist for this Jobab Chat (AI-as-a-Service) Platform, powered by N.I. BIZ Soft.
 Your job is to explain our platform services, pricing, benefits, and technical capabilities to website visitors, enterprise clients, and business owners.
 
 [PLATFORM OVERVIEW & CORE SERVICES]:
