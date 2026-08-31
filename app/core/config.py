@@ -28,14 +28,13 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: Optional[str] = None
     REDIS_URL: Optional[str] = None
 
-    # AI Provider Settings (OpenAI-compatible & Gemini)
-    AI_BASE_URL: Optional[str] = "http://4bhgvnanm2jpfo73shwbhcsh.163.227.238.4.sslip.io/v1"
-    AI_API_KEY: Optional[str] = "sk-gemini"
-    AI_MODEL: str = "gemini-3.6-flash"
+    # AI Provider Settings (OpenRouter Universal Gateway)
+    AI_BASE_URL: Optional[str] = "https://openrouter.ai/api/v1"
+    AI_API_KEY: Optional[str] = "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"
+    AI_MODEL: str = "google/gemini-2.5-flash"
 
-    # Google Gemini Default Fallback
-    GEMINI_API_KEY: Optional[str] = None
-    DEFAULT_GEMINI_MODEL: str = "gemini-3.6-flash"
+    # AI Model Defaults
+    DEFAULT_GEMINI_MODEL: str = "google/gemini-2.5-flash"
     DEFAULT_EMBEDDING_MODEL: str = "text-embedding-004"
 
     # CORS
