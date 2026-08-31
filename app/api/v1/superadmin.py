@@ -1263,12 +1263,12 @@ THEME_PRESETS = [
 class ThemeConfigPayload(BaseModel):
     preset_id: str = "ocean_sapphire"
     name: Optional[str] = "Custom Theme"
-    platform_name: Optional[str] = "Enterprise AIaaS"
+    platform_name: Optional[str] = "Jobab Chat"
     platform_tagline: Optional[str] = "Autonomous Customer Communication & Sales Cloud"
     logo_url: Optional[str] = ""
     favicon_url: Optional[str] = ""
     widget_avatar_url: Optional[str] = ""
-    footer_text: Optional[str] = "© 2026 Enterprise AIaaS Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI"
+    footer_text: Optional[str] = "© 2026 Jobab Chat Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI"
     support_email: Optional[str] = "support@enterprise.example"
     primary_color: str = "#2563EB"
     primary_hover: str = "#1D4ED8"
@@ -1287,12 +1287,12 @@ async def get_public_platform_theme(db: AsyncSession = Depends(get_db)):
     
     default_config = {
         **THEME_PRESETS[0],
-        "platform_name": "Enterprise AIaaS",
+        "platform_name": "Jobab Chat",
         "platform_tagline": "Autonomous Customer Communication & Sales Cloud",
         "logo_url": "https://iili.io/CsuMe3l.png",
         "favicon_url": "https://iili.io/CsuMe3l.png",
         "widget_avatar_url": "",
-        "footer_text": "© 2026 Enterprise AIaaS Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI",
+        "footer_text": "© 2026 Jobab Chat Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI",
         "support_email": "support@enterprise.example"
     }
     
@@ -1315,12 +1315,12 @@ async def get_superadmin_theme(
     
     default_config = {
         **THEME_PRESETS[0],
-        "platform_name": "Enterprise AIaaS",
+        "platform_name": "Jobab Chat",
         "platform_tagline": "Autonomous Customer Communication & Sales Cloud",
         "logo_url": "https://iili.io/CsuMe3l.png",
         "favicon_url": "https://iili.io/CsuMe3l.png",
         "widget_avatar_url": "",
-        "footer_text": "© 2026 Enterprise AIaaS Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI",
+        "footer_text": "© 2026 Jobab Chat Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI",
         "support_email": "support@enterprise.example"
     }
     

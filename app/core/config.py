@@ -4,7 +4,7 @@ from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Enterprise AIaaS SaaS Platform"
+    PROJECT_NAME: str = "Jobab Chat SaaS Platform"
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = "super-secret-enterprise-encryption-key-change-in-prod-32bytes!"
     ALGORITHM: str = "HS256"

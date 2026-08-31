@@ -1,5 +1,5 @@
 /**
- * Enterprise AIaaS Chatbot Widget
+ * Jobab Chat Chatbot Widget
  * Version: 2.2.0
  * Features: 
  * - Bidirectional AI Pause / Resume Controller (Visitor & Platform Owner / Human Agent)
@@ -1879,10 +1879,10 @@
         itemsHtml = `
           <div style="background:#F8FAFC;padding:8px;border-radius:8px;font-size:11px;color:#334155;display:flex;flex-direction:column;gap:4px;">
             ${o.items.map(function (it) {
-              var itemTotal = it.line_total || it.total || ((it.unit_price || it.price || 0) * (it.quantity || 1));
-              var sizeText = it.selected_size || it.size ? " (" + (it.selected_size || it.size) + ")" : "";
-              return `<div style="display:flex;justify-content:space-between;align-items:center;"><span>${it.quantity}x ${it.title}${sizeText}</span><b>৳${Number(itemTotal).toLocaleString()}</b></div>`;
-            }).join("")}
+          var itemTotal = it.line_total || it.total || ((it.unit_price || it.price || 0) * (it.quantity || 1));
+          var sizeText = it.selected_size || it.size ? " (" + (it.selected_size || it.size) + ")" : "";
+          return `<div style="display:flex;justify-content:space-between;align-items:center;"><span>${it.quantity}x ${it.title}${sizeText}</span><b>৳${Number(itemTotal).toLocaleString()}</b></div>`;
+        }).join("")}
           </div>
         `;
       }
