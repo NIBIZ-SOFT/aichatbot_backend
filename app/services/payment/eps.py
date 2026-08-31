@@ -11,9 +11,11 @@ logger = logging.getLogger(__name__)
 
 class EpsService:
     """
-    EPS (Easy Payment System) Payment Gateway Service
-    Supports official EPS Token generation with HMAC-SHA512 hashing,
-    Payment Initialization, and Transaction Status Verification for Sandbox & Live modes.
+    Official EPS (Easy Payment System) Payment Gateway Service
+    Direct 1-to-1 parity with official EPS Gateway Documentation & PHP implementation:
+    - Auth Token Generation with HMAC-SHA512 header (POST /v1/Auth/GetToken)
+    - Payment Initialization (POST /v1/EPSEngine/InitializeEPS)
+    - Transaction Status Verification (GET /v1/EPSEngine/CheckMerchantTransactionStatus)
     """
     def __init__(
         self,
@@ -38,7 +40,8 @@ class EpsService:
     @staticmethod
     def generate_hash(data: str, secret_key: str) -> str:
         """
-        Generates HMAC-SHA512 signature encoded in Base64 (equivalent to PHP hash_hmac + base64_encode).
+        Official EPS Hash Algorithm:
+        base64_encode(hash_hmac('sha512', utf8_encode($data), $secretKey, true))
         """
         signature = hmac.new(
             secret_key.encode("utf-8"),
@@ -79,13 +82,14 @@ class EpsService:
                 self.base_url = "https://sandboxpgapi.eps.com.bd"
             elif not config["is_sandbox"] and "sandbox" in self.base_url.lower():
                 self.base_url = "https://pgapi.eps.com.bd"
-        # Invalidate token cache
+        # Invalidate token cache on settings change
         self._token = None
         self._token_expiry = 0
 
     async def grant_token(self) -> str:
         """
-        Fetches or returns cached EPS token (valid for 3600 seconds).
+        Official Endpoint: POST /v1/Auth/GetToken
+        Header: x-hash = generateHash(userName, hash_key)
         """
         now = time.time()
         if self._token and now < (self._token_expiry - 120):
@@ -102,25 +106,20 @@ class EpsService:
             "password": self.password
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                res = await client.post(url, json=payload, headers=headers)
-                data = res.json()
-                if res.status_code == 200 and ("token" in data or "data" in data):
-                    token = data.get("token") or data.get("data", {}).get("token")
-                    if token:
-                        self._token = token
-                        self._token_expiry = now + 3600
-                        logger.info("Successfully granted new EPS token")
-                        return self._token
-                logger.warning(f"EPS grant token returned non-standard response: {data}")
-        except Exception as e:
-            logger.warning(f"EPS grant token API request failed: {e}. Using simulated sandbox token.")
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            res = await client.post(url, json=payload, headers=headers)
+            data = res.json()
+            if res.status_code == 200 and ("token" in data or "data" in data):
+                token = data.get("token") or data.get("data", {}).get("token")
+                if token:
+                    self._token = token
+                    self._token_expiry = now + 3500
+                    logger.info("Successfully granted new official EPS token")
+                    return self._token
 
-        # Resilient Sandbox Fallback
-        self._token = f"eps_token_{uuid.uuid4().hex[:16]}"
-        self._token_expiry = now + 3600
-        return self._token
+            error_msg = data.get("ErrorMessage") or data.get("message") or f"HTTP {res.status_code}"
+            logger.error(f"EPS GetToken failed: {error_msg}")
+            raise RuntimeError(f"Failed to authenticate with EPS Gateway: {error_msg}")
 
     async def initialize_payment(
         self,
@@ -139,7 +138,9 @@ class EpsService:
         callback_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Initializes an EPS payment session and retrieves the payment gateway RedirectURL.
+        Official Endpoint: POST /v1/EPSEngine/InitializeEPS
+        Header: x-hash = generateHash(merchantTransactionId, hash_key)
+        Header: Authorization = Bearer {token}
         """
         from app.core.config import settings
         if not callback_url:
@@ -148,6 +149,9 @@ class EpsService:
             callback_url += f"&merchantTransactionId={merchant_transaction_id}"
         else:
             callback_url += f"?merchantTransactionId={merchant_transaction_id}"
+
+        # Generate unique CustomerOrderId required by EPS API
+        order_id = customer_order_id or f"ORD{int(time.time())}{uuid.uuid4().hex[:4].upper()}"
 
         token = await self.grant_token()
         url = f"{self.base_url}/v1/EPSEngine/InitializeEPS"
@@ -160,7 +164,7 @@ class EpsService:
         payment_data = {
             "merchantId": self.merchant_id,
             "storeId": self.store_id,
-            "CustomerOrderId": customer_order_id or f"ORD-{uuid.uuid4().hex[:8].upper()}",
+            "CustomerOrderId": order_id,
             "merchantTransactionId": merchant_transaction_id,
             "transactionTypeId": 1,
             "totalAmount": round(float(amount), 2),
@@ -180,39 +184,30 @@ class EpsService:
             "productCategory": product_category
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                res = await client.post(url, json=payment_data, headers=headers)
-                data = res.json()
-                redirect_url = data.get("RedirectURL") or data.get("redirectUrl") or data.get("data", {}).get("RedirectURL")
-                if res.status_code == 200 and redirect_url:
-                    return {
-                        "status": "success",
-                        "merchantTransactionId": merchant_transaction_id,
-                        "redirectURL": redirect_url,
-                        "totalAmount": amount,
-                        "currency": "BDT",
-                        "is_sandbox": "sandbox" in self.base_url.lower()
-                    }
-                else:
-                    logger.warning(f"EPS InitializeEPS returned non-standard response: {data}")
-        except Exception as e:
-            logger.warning(f"EPS InitializeEPS API call failed: {e}. Fallback to simulated checkout.")
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            res = await client.post(url, json=payment_data, headers=headers)
+            data = res.json()
+            redirect_url = data.get("RedirectURL") or data.get("redirectUrl") or data.get("data", {}).get("RedirectURL")
+            if res.status_code == 200 and redirect_url:
+                return {
+                    "status": "success",
+                    "merchantTransactionId": merchant_transaction_id,
+                    "transactionId": data.get("TransactionId"),
+                    "redirectURL": redirect_url,
+                    "totalAmount": amount,
+                    "currency": "BDT",
+                    "is_sandbox": "sandbox" in self.base_url.lower()
+                }
 
-        # High-Fidelity Sandbox Simulation
-        sim_redirect_url = f"{callback_url}&status=SUCCESS&simulation=true"
-        return {
-            "status": "success",
-            "merchantTransactionId": merchant_transaction_id,
-            "redirectURL": sim_redirect_url,
-            "totalAmount": amount,
-            "currency": "BDT",
-            "is_sandbox": True
-        }
+            error_msg = data.get("ErrorMessage") or f"EPS API Error Code: {data.get('ErrorCode')}"
+            logger.error(f"EPS InitializeEPS failed: {error_msg}")
+            raise RuntimeError(f"EPS Initialization Error: {error_msg}")
 
     async def verify_transaction(self, merchant_transaction_id: str) -> Dict[str, Any]:
         """
-        Verifies transaction status directly with EPS Engine.
+        Official Endpoint: GET /v1/EPSEngine/CheckMerchantTransactionStatus?merchantTransactionId={merchant_transaction_id}
+        Header: x-hash = generateHash(merchantTransactionId, hash_key)
+        Header: Authorization = Bearer {token}
         """
         token = await self.grant_token()
         url = f"{self.base_url}/v1/EPSEngine/CheckMerchantTransactionStatus?merchantTransactionId={merchant_transaction_id}"
@@ -222,47 +217,48 @@ class EpsService:
             "Authorization": f"Bearer {token}"
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                res = await client.get(url, headers=headers)
-                data = res.json()
-                
-                # Extract status across possible EPS response formats
-                status = None
-                if isinstance(data, dict):
-                    status = (
-                        data.get("transactionStatus") or
-                        data.get("status") or
-                        data.get("data", {}).get("transactionStatus") or
-                        data.get("data", {}).get("status")
-                    )
-                
-                status_str = str(status).upper() if status else "UNKNOWN"
-                if res.status_code == 200 and status_str in ["SUCCESS", "COMPLETED"]:
-                    return {
-                        "status": "SUCCESS",
-                        "merchantTransactionId": merchant_transaction_id,
-                        "raw": data,
-                        "is_sandbox": "sandbox" in self.base_url.lower()
-                    }
-                elif status_str in ["FAILED", "FAILURE", "CANCEL", "CANCELED"]:
-                    return {
-                        "status": status_str,
-                        "merchantTransactionId": merchant_transaction_id,
-                        "raw": data,
-                        "is_sandbox": "sandbox" in self.base_url.lower()
-                    }
-                else:
-                    logger.warning(f"EPS verify transaction returned: {data}")
-        except Exception as e:
-            logger.warning(f"EPS verify transaction call failed: {e}. Fallback to simulated verified status.")
-
-        # Sandbox Simulation Fallback
-        return {
-            "status": "SUCCESS",
-            "merchantTransactionId": merchant_transaction_id,
-            "is_sandbox": True,
-            "simulated": True
-        }
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            res = await client.get(url, headers=headers)
+            data = res.json()
+            
+            # EPS official status response keys: Status, transactionStatus, status
+            status = None
+            if isinstance(data, dict):
+                status = (
+                    data.get("Status") or
+                    data.get("transactionStatus") or
+                    data.get("status") or
+                    data.get("data", {}).get("Status") or
+                    data.get("data", {}).get("transactionStatus")
+                )
+            
+            status_str = str(status).upper() if status else "UNKNOWN"
+            if res.status_code == 200 and status_str in ["SUCCESS", "COMPLETED"]:
+                return {
+                    "status": "SUCCESS",
+                    "merchantTransactionId": merchant_transaction_id,
+                    "epsTransactionId": data.get("EPSTransactionId"),
+                    "amount": data.get("TotalAmount"),
+                    "raw": data,
+                    "is_sandbox": "sandbox" in self.base_url.lower()
+                }
+            elif status_str in ["FAILED", "FAILURE", "CANCEL", "CANCELED"]:
+                return {
+                    "status": status_str,
+                    "merchantTransactionId": merchant_transaction_id,
+                    "epsTransactionId": data.get("EPSTransactionId"),
+                    "raw": data,
+                    "is_sandbox": "sandbox" in self.base_url.lower()
+                }
+            else:
+                error_msg = data.get("ErrorMessage") or f"Status: {status_str}"
+                logger.warning(f"EPS verify transaction returned: {data}")
+                return {
+                    "status": status_str,
+                    "merchantTransactionId": merchant_transaction_id,
+                    "errorMessage": error_msg,
+                    "raw": data,
+                    "is_sandbox": "sandbox" in self.base_url.lower()
+                }
 
 eps_service = EpsService()
