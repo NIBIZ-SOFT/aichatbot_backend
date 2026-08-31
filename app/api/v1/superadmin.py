@@ -607,15 +607,21 @@ async def get_openrouter_live_models(
         "models": models
     }
 
+class TestAIPingPayload(BaseModel):
+    model: Optional[str] = None
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+
 @router.post("/infrastructure/test-ai")
 async def test_platform_ai_ping(
+    payload: Optional[TestAIPingPayload] = None,
     admin: User = Depends(require_super_admin)
 ):
-    """Executes a real-time AI latency and response benchmark test with the active configuration."""
+    """Executes a real-time AI latency and response benchmark test with the active or requested configuration."""
     import asyncio, time
     start_t = time.time()
     ai_cfg = gemini_service.get_config()
-    current_model = ai_cfg.get("master_model", "google/gemini-2.5-flash")
+    current_model = (payload.model.strip() if payload and payload.model and payload.model.strip() else None) or ai_cfg.get("master_model", "google/gemini-2.5-flash")
     try:
         result = await asyncio.wait_for(
             gemini_service.generate_chat_response(
@@ -624,7 +630,7 @@ async def test_platform_ai_ping(
                 user_message="Platform AI connectivity check",
                 model=current_model
             ),
-            timeout=8.0
+            timeout=12.0
         )
         elapsed_ms = int((time.time() - start_t) * 1000)
         return {
