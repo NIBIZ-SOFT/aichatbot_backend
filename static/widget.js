@@ -2209,10 +2209,24 @@
       loadCart();
     }
 
+    // Format Currency Helper (handles numbers, numeric strings, and formatted strings)
+    function formatCurrency(val) {
+      if (val === undefined || val === null || val === "") return "0.00";
+      if (typeof val === "number") {
+        return isNaN(val) ? "0.00" : val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      var str = String(val).replace(/,/g, "").trim();
+      var num = parseFloat(str);
+      if (!isNaN(num)) {
+        return num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      return String(val);
+    }
+
     // Render Interactive bKash Pending Action Card with 5-Minute Auto-Expiry Timer
     function appendBkashPendingCard(bkData) {
       var ordNum = bkData.order_number || bkData.merchantInvoiceNumber;
-      var totalAmt = bkData.total_amount ? Number(bkData.total_amount).toLocaleString() : "0";
+      var totalAmt = formatCurrency(bkData.total_amount);
       var currentBkashUrl = bkData.bkashURL || "";
 
       // Remove previous pending card if any
@@ -2381,7 +2395,7 @@
     // Render Interactive EPS Pending Action Card with 5-Minute Auto-Expiry Timer
     function appendEpsPendingCard(epsData) {
       var ordNum = epsData.order_number || epsData.merchantTransactionId;
-      var totalAmt = epsData.total_amount ? Number(epsData.total_amount).toLocaleString() : "0";
+      var totalAmt = formatCurrency(epsData.total_amount);
       var currentEpsUrl = epsData.redirectURL || "";
 
       // Remove previous pending card if any
@@ -2785,7 +2799,7 @@
           `| :--- | :--- |\n` +
           `| **Order Number** | \`${ordNum}\` |\n` +
           `| **bKash TrxID** | \`${trx}\` |\n` +
-          `| **Total Amount Paid** | **৳${Number(amt).toLocaleString()} BDT** |\n` +
+          `| **Total Amount Paid** | **৳${formatCurrency(amt)} BDT** |\n` +
           `| **Payment Status** | ✅ Confirmed & Settled |\n\n` +
           `> 📱 **SMS Confirmation:** Dispatched to customer mobile.\n` +
           `> 🚚 **Next Step:** Our dispatch team is currently packing your parcel!`,
@@ -2830,7 +2844,7 @@
           `| :--- | :--- |\n` +
           `| **Order Number** | \`${ordNum}\` |\n` +
           `| **EPS TrxID** | \`${trx}\` |\n` +
-          `| **Total Amount Paid** | **৳${Number(amt).toLocaleString()} BDT** |\n` +
+          `| **Total Amount Paid** | **৳${formatCurrency(amt)} BDT** |\n` +
           `| **Payment Status** | ✅ Confirmed & Settled |\n\n` +
           `> 📱 **SMS Confirmation:** Dispatched to customer mobile.\n` +
           `> 🚚 **Next Step:** Our dispatch team is currently packing your parcel!`,
