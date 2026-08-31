@@ -128,7 +128,7 @@ class GeminiService:
     def __init__(self, api_key: Optional[str] = None):
         # Default to OpenRouter API Gateway
         self.ai_base_url = (settings.AI_BASE_URL or os.environ.get("AI_BASE_URL", "https://openrouter.ai/api/v1")).rstrip("/")
-        self.api_key = api_key or settings.AI_API_KEY or settings.GEMINI_API_KEY or os.environ.get("AI_API_KEY", "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")
+        self.api_key = api_key or settings.AI_API_KEY or settings.GEMINI_API_KEY or os.environ.get("AI_API_KEY", "")
         self.model = settings.AI_MODEL or settings.DEFAULT_GEMINI_MODEL or "google/gemini-2.5-flash"
         self.fallback_model = "google/gemini-2.5-flash-lite"
         self.embedding_model = "text-embedding-004"

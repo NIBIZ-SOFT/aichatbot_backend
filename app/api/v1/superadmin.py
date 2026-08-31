@@ -548,9 +548,14 @@ async def get_global_ai_infrastructure(
 
 @router.get("/infrastructure/settings", response_model=AISettingsOut)
 async def get_global_ai_settings(
-    admin: User = Depends(require_super_admin)
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Returns active AI API Key, base URL, model hyperparameters, and catalog."""
+    """Returns active AI API Key, base URL, model hyperparameters, and catalog from Database."""
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_ai_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if setting and setting.value_json:
+        gemini_service.update_config(setting.value_json)
     cfg = gemini_service.get_config()
     return AISettingsOut(**cfg)
 
@@ -560,9 +565,19 @@ async def update_global_ai_settings(
     admin: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Platform Super Admin update of platform-wide Google Gemini / AI credentials and models."""
+    """Platform Super Admin update of platform-wide AI credentials and models stored in Database."""
     updates = payload.model_dump(exclude_unset=True)
     gemini_service.update_config(updates)
+    curr_cfg = gemini_service.get_config()
+
+    # Save / Upsert into PostgreSQL PlatformSetting
+    stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_ai_config")
+    setting = (await db.execute(stmt)).scalars().first()
+    if not setting:
+        setting = PlatformSetting(key="platform_ai_config", value_json=curr_cfg)
+        db.add(setting)
+    else:
+        setting.value_json = curr_cfg
 
     # Record Audit Log
     masked_key = (payload.api_key[:6] + "..." + payload.api_key[-4:]) if (payload.api_key and len(payload.api_key) > 10) else ("(unchanged)" if not payload.api_key else "***")
@@ -588,7 +603,7 @@ async def update_global_ai_settings(
 
     return {
         "status": "success",
-        "message": "Platform AI Infrastructure and Model credentials updated successfully.",
+        "message": "Platform AI Infrastructure and Model credentials permanently saved in Database.",
         "config": gemini_service.get_config()
     }
 

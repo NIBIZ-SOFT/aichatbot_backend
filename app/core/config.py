@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # AI Provider Settings (OpenRouter Universal Gateway)
     AI_BASE_URL: Optional[str] = "https://openrouter.ai/api/v1"
-    AI_API_KEY: Optional[str] = "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"
+    AI_API_KEY: Optional[str] = None
     AI_MODEL: str = "google/gemini-2.5-flash"
 
     # AI Model Defaults
