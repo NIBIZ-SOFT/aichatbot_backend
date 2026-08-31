@@ -565,7 +565,7 @@ async def update_global_ai_settings(
     admin: User = Depends(require_super_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Platform Super Admin update of platform-wide AI credentials and models stored in Database."""
+    """Platform Super Admin update of platform-wide AI credent ials and models stored in Database."""
     updates = payload.model_dump(exclude_unset=True)
     gemini_service.update_config(updates)
     curr_cfg = gemini_service.get_config()
