@@ -562,7 +562,7 @@ async def create_eps_checkout_session(
         customer_email=customer_email,
         customer_phone=customer_phone,
         customer_address=payload.customer_address or "Dhaka, Bangladesh",
-        product_name=f"PADMA AI {tier_str.upper()} Subscription",
+        product_name=f"Jobab Chat {tier_str.upper()} Subscription",
         product_category="SaaS",
         callback_url=callback_url
     )

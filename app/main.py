@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Enterprise AI-as-a-Service (AIaaS) & Customer Communication Platform API",
+    description="Jobab Chat — Enterprise Customer Communication & AI Agent Platform API",
     version="1.0.0",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url=f"{settings.API_V1_STR}/docs",
