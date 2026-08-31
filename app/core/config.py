@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     AI_BASE_URL: Optional[str] = "https://openrouter.ai/api/v1"
     AI_API_KEY: Optional[str] = None
     AI_MODEL: str = "google/gemini-2.5-flash"
+    GEMINI_API_KEY: Optional[str] = None
+    OPENAI_API_KEY: Optional[str] = None
 
     # AI Model Defaults
     DEFAULT_GEMINI_MODEL: str = "google/gemini-2.5-flash"
