@@ -1,5 +1,5 @@
 /**
- * Enterprise AIaaS Chatbot Widget
+ * Jobab Chat Chatbot Widget
  * Version: 2.2.0
  * Features: 
  * - Bidirectional AI Pause / Resume Controller (Visitor & Platform Owner / Human Agent)
@@ -1014,6 +1014,39 @@
         color: #111827;
       }
 
+      /* EPS Payment Pending Interactive Card */
+      .aiaas-pay-action-card.eps {
+        background: #ECFDF5;
+        border: 1.5px solid #A7F3D0;
+        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.08);
+      }
+      .aiaas-pay-action-card.eps .aiaas-pay-action-title {
+        color: #065F46;
+      }
+      .aiaas-pay-action-card.eps .aiaas-pay-action-desc {
+        color: #047857;
+      }
+      .aiaas-btn-reopen-eps {
+        background: #059669;
+        color: #ffffff;
+        border: none;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: transform 0.15s, opacity 0.15s;
+        box-shadow: 0 2px 8px rgba(5, 150, 105, 0.25);
+      }
+      .aiaas-btn-reopen-eps:hover {
+        opacity: 0.95;
+        transform: translateY(-1px);
+      }
+
       /* In-Widget 1-Click Checkout Drawer */
       .aiaas-checkout-drawer {
         position: absolute;
@@ -1278,6 +1311,50 @@
     // Adaptive Business Model & Archetype Flags
     var isEcomEnabled = false;
     var currentBusinessCategory = "ecommerce";
+    var currentEcomConfig = null;
+
+    function updatePaymentMethodOptions(ecom) {
+      if (!chkPayment) return;
+      chkPayment.innerHTML = "";
+
+      var bkashActive = Boolean(ecom && ecom.bkash_enabled);
+      var epsActive = Boolean(ecom && ecom.eps_enabled);
+      var codActive = ecom ? (ecom.cod_enabled !== false) : true;
+
+      var optionCount = 0;
+
+      if (codActive) {
+        var optCod = document.createElement("option");
+        optCod.value = "cash_on_delivery";
+        optCod.textContent = "💵 Cash on Delivery (COD)";
+        chkPayment.appendChild(optCod);
+        optionCount++;
+      }
+
+      if (bkashActive) {
+        var optBkash = document.createElement("option");
+        optBkash.value = "bkash";
+        optBkash.textContent = "📱 bKash Online Payment";
+        chkPayment.appendChild(optBkash);
+        optionCount++;
+      }
+
+      if (epsActive) {
+        var optEps = document.createElement("option");
+        optEps.value = "eps";
+        optEps.textContent = "💳 EPS (Cards / NetBanking / Mobile Banking)";
+        chkPayment.appendChild(optEps);
+        optionCount++;
+      }
+
+      // Fallback if none is enabled
+      if (optionCount === 0) {
+        var optDef = document.createElement("option");
+        optDef.value = "cash_on_delivery";
+        optDef.textContent = "💵 Cash on Delivery (COD)";
+        chkPayment.appendChild(optDef);
+      }
+    }
 
     function renderAdaptiveChips(category, isEcom) {
       if (!chipsBox) return;
@@ -1879,10 +1956,10 @@
         itemsHtml = `
           <div style="background:#F8FAFC;padding:8px;border-radius:8px;font-size:11px;color:#334155;display:flex;flex-direction:column;gap:4px;">
             ${o.items.map(function (it) {
-              var itemTotal = it.line_total || it.total || ((it.unit_price || it.price || 0) * (it.quantity || 1));
-              var sizeText = it.selected_size || it.size ? " (" + (it.selected_size || it.size) + ")" : "";
-              return `<div style="display:flex;justify-content:space-between;align-items:center;"><span>${it.quantity}x ${it.title}${sizeText}</span><b>৳${Number(itemTotal).toLocaleString()}</b></div>`;
-            }).join("")}
+          var itemTotal = it.line_total || it.total || ((it.unit_price || it.price || 0) * (it.quantity || 1));
+          var sizeText = it.selected_size || it.size ? " (" + (it.selected_size || it.size) + ")" : "";
+          return `<div style="display:flex;justify-content:space-between;align-items:center;"><span>${it.quantity}x ${it.title}${sizeText}</span><b>৳${Number(itemTotal).toLocaleString()}</b></div>`;
+        }).join("")}
           </div>
         `;
       }
@@ -1947,6 +2024,7 @@
       chkName.value = visitorName || chkName.value || "";
       chkPhone.value = visitorContact || chkPhone.value || "";
       renderCartDrawer();
+      updatePaymentMethodOptions(currentEcomConfig);
       checkoutModal.classList.add("open");
     }
 
@@ -1989,7 +2067,50 @@
         });
 
         try {
-          if (paymentMethod === "bkash") {
+          if (paymentMethod === "eps") {
+            var res = await fetch(`${apiUrl}/public/widget/orders/eps/init`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                widget_key: widgetKey,
+                visitor_session_id: visitorSessionId,
+                customer_name: name,
+                customer_phone: phone,
+                customer_email: (visitorContact && visitorContact.indexOf("@") > -1) ? visitorContact : undefined,
+                delivery_address: address,
+                delivery_city: city,
+                payment_method: "eps",
+                items: itemsPayload
+              })
+            });
+
+            if (res.ok) {
+              var epsData = await res.json();
+              checkoutModal.classList.remove("open");
+              clearCart();
+
+              if (!visitorName && name) {
+                visitorName = name;
+                visitorContact = phone;
+                localStorage.setItem("aiaas_vis_name_" + widgetKey, name);
+                localStorage.setItem("aiaas_vis_contact_" + widgetKey, phone);
+                if (prechatBox) prechatBox.style.display = "none";
+                if (messagesBox) messagesBox.style.display = "flex";
+                if (chipsBox) chipsBox.style.display = "flex";
+                if (footerBox) footerBox.style.display = "flex";
+              }
+
+              // Append Interactive EPS Pending Card with Retry & Switch-to-COD Buttons
+              appendEpsPendingCard(epsData);
+
+              if (epsData.redirectURL) {
+                window.open(epsData.redirectURL, "EPSPayment", "width=600,height=750");
+              }
+            } else {
+              var err = await res.json().catch(() => ({}));
+              alert(err.detail || "EPS payment initialization failed. Please try Cash on Delivery.");
+            }
+          } else if (paymentMethod === "bkash") {
             var res = await fetch(`${apiUrl}/public/widget/orders/bkash/init`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -2088,10 +2209,24 @@
       loadCart();
     }
 
+    // Format Currency Helper (handles numbers, numeric strings, and formatted strings)
+    function formatCurrency(val) {
+      if (val === undefined || val === null || val === "") return "0.00";
+      if (typeof val === "number") {
+        return isNaN(val) ? "0.00" : val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      var str = String(val).replace(/,/g, "").trim();
+      var num = parseFloat(str);
+      if (!isNaN(num)) {
+        return num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      return String(val);
+    }
+
     // Render Interactive bKash Pending Action Card with 5-Minute Auto-Expiry Timer
     function appendBkashPendingCard(bkData) {
       var ordNum = bkData.order_number || bkData.merchantInvoiceNumber;
-      var totalAmt = bkData.total_amount ? Number(bkData.total_amount).toLocaleString() : "0";
+      var totalAmt = formatCurrency(bkData.total_amount);
       var currentBkashUrl = bkData.bkashURL || "";
 
       // Remove previous pending card if any
@@ -2211,6 +2346,146 @@
           } finally {
             btnReopen.disabled = false;
             btnReopen.textContent = "⚡ Re-open bKash Checkout";
+          }
+        });
+      }
+
+      // Event: Switch to Cash on Delivery
+      if (btnSwitch) {
+        btnSwitch.addEventListener("click", async function () {
+          btnSwitch.disabled = true;
+          btnSwitch.textContent = "Switching to COD...";
+          try {
+            var res = await fetch(`${apiUrl}/public/widget/orders/switch-cod`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                widget_key: widgetKey,
+                visitor_session_id: visitorSessionId,
+                order_number: ordNum
+              })
+            });
+            if (res.ok) {
+              var data = await res.json();
+              if (cardDiv._timerInterval) clearInterval(cardDiv._timerInterval);
+              cardDiv.remove();
+              appendMessage(
+                `🎉 **Payment Method Switched to Cash on Delivery!**\n\n` +
+                `• **Order Number:** \`${ordNum}\`\n` +
+                `• **Total Amount:** ৳${totalAmt} BDT\n` +
+                `• **Status:** Confirmed (Pay upon delivery)\n` +
+                `• **SMS:** Confirmation sent to your mobile phone.`,
+                "system",
+                "Order Desk"
+              );
+            } else {
+              var err = await res.json().catch(() => ({}));
+              alert(err.detail || "Could not switch payment method.");
+            }
+          } catch (e) {
+            alert("Network error switching payment method.");
+          } finally {
+            btnSwitch.disabled = false;
+            btnSwitch.textContent = "💵 Switch to Cash on Delivery";
+          }
+        });
+      }
+    }
+
+    // Render Interactive EPS Pending Action Card with 5-Minute Auto-Expiry Timer
+    function appendEpsPendingCard(epsData) {
+      var ordNum = epsData.order_number || epsData.merchantTransactionId;
+      var totalAmt = formatCurrency(epsData.total_amount);
+      var currentEpsUrl = epsData.redirectURL || "";
+
+      // Remove previous pending card if any
+      var prevCard = win.querySelector("#aiaas-pay-card-" + ordNum);
+      if (prevCard) {
+        if (prevCard._timerInterval) clearInterval(prevCard._timerInterval);
+        prevCard.remove();
+      }
+
+      var cardDiv = document.createElement("div");
+      cardDiv.className = "aiaas-msg system";
+      cardDiv.id = "aiaas-pay-card-" + ordNum;
+
+      cardDiv.innerHTML = `
+        <div class="aiaas-msg-author">💳 EPS Payment Desk</div>
+        <div class="aiaas-msg-body">
+          <div class="aiaas-pay-action-card eps">
+            <div class="aiaas-pay-action-title">
+              <span id="aiaas-pay-title-${ordNum}">💳 EPS Payment Pending</span>
+              <span style="margin-left:auto; font-size:11px; background:#D1FAE5; color:#065F46; padding:2px 8px; border-radius:12px; font-weight:bold;">৳${totalAmt} BDT</span>
+            </div>
+            <div class="aiaas-pay-action-desc" id="aiaas-pay-desc-${ordNum}">
+              Order #<strong>${ordNum}</strong> initiated. If your EPS checkout window closed or timed out, click below to re-open or switch to Cash on Delivery:
+            </div>
+            <div class="aiaas-pay-btn-group" id="aiaas-btn-grp-${ordNum}">
+              <button class="aiaas-btn-reopen-eps" id="btn-reopen-${ordNum}">
+                ⚡ Re-open EPS Checkout
+              </button>
+              <button class="aiaas-btn-switch-cod" id="btn-switch-cod-${ordNum}">
+                💵 Switch to Cash on Delivery
+              </button>
+            </div>
+            <div class="aiaas-pay-timer" style="font-size:11px;color:#065F46;margin-top:8px;padding-top:6px;border-top:1px dashed #A7F3D0;display:flex;align-items:center;justify-content:space-between;">
+              <span>⏳ EPS session expires in:</span>
+              <strong id="aiaas-timer-${ordNum}" style="font-family:monospace;font-size:12px;background:#D1FAE5;padding:1px 6px;border-radius:6px;color:#065F46;">05:00</strong>
+            </div>
+          </div>
+        </div>
+      `;
+
+      messagesBox.appendChild(cardDiv);
+      messagesBox.scrollTop = messagesBox.scrollHeight;
+
+      var timeLeftSeconds = 300; // 5 minutes
+      var timerEl = cardDiv.querySelector("#aiaas-timer-" + ordNum);
+      var titleEl = cardDiv.querySelector("#aiaas-pay-title-" + ordNum);
+      var descEl = cardDiv.querySelector("#aiaas-pay-desc-" + ordNum);
+      var btnReopen = cardDiv.querySelector("#btn-reopen-" + ordNum);
+      var btnSwitch = cardDiv.querySelector("#btn-switch-cod-" + ordNum);
+
+      var timerInterval = setInterval(function () {
+        timeLeftSeconds--;
+        if (timeLeftSeconds <= 0) {
+          clearInterval(timerInterval);
+          if (timerEl) {
+            timerEl.textContent = "EXPIRED";
+            timerEl.style.background = "#FEE2E2";
+            timerEl.style.color = "#DC2626";
+          }
+          if (titleEl) {
+            titleEl.innerHTML = "⚠️ EPS Session Expired";
+          }
+          if (descEl) {
+            descEl.innerHTML = `EPS payment session for order #<strong>${ordNum}</strong> has expired. Click below to convert your order to <strong>Cash on Delivery (COD)</strong>:`;
+          }
+          if (btnReopen) {
+            btnReopen.style.display = "none";
+          }
+          if (btnSwitch) {
+            btnSwitch.style.background = "#059669";
+            btnSwitch.style.color = "#ffffff";
+            btnSwitch.style.border = "none";
+            btnSwitch.innerHTML = "🚀 Confirm as Cash on Delivery ➔";
+          }
+        } else {
+          var mins = Math.floor(timeLeftSeconds / 60);
+          var secs = timeLeftSeconds % 60;
+          if (timerEl) {
+            timerEl.textContent = (mins < 10 ? "0" : "") + mins + ":" + (secs < 10 ? "0" : "") + secs;
+          }
+        }
+      }, 1000);
+
+      cardDiv._timerInterval = timerInterval;
+
+      // Event: Re-open EPS Checkout
+      if (btnReopen) {
+        btnReopen.addEventListener("click", function () {
+          if (currentEpsUrl) {
+            window.open(currentEpsUrl, "EPSPayment", "width=600,height=750");
           }
         });
       }
@@ -2400,8 +2675,10 @@
         conversationId = data.conversation_id;
 
         if (data.widget) {
-          isEcomEnabled = Boolean(data.widget.ecommerce && data.widget.ecommerce.enabled);
+          currentEcomConfig = data.widget.ecommerce || null;
+          isEcomEnabled = Boolean(currentEcomConfig && currentEcomConfig.enabled);
           currentBusinessCategory = (data.widget.business_category || (isEcomEnabled ? "ecommerce" : "erp")).toLowerCase();
+          updatePaymentMethodOptions(currentEcomConfig);
 
           // Adaptive Header Cart Button display
           if (btnHeaderCart) {
@@ -2470,23 +2747,29 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             widget_key: widgetKey,
+            conversation_id: conversationId,
             visitor_session_id: visitorSessionId,
-            content: text
+            content: text,
+            message: text
           })
         });
+
+        if (!res.ok) {
+          throw new Error("Failed to send message");
+        }
 
         var data = await res.json();
         hideTyping();
 
         if (data.is_handover_requested) {
           updateAIStatusUI(true);
-        } else if (data.ai_response) {
-          appendMessage(data.ai_response, "ai", "AI Assistant", null, data.ui_component);
+        } else if (data.ai_response || data.reply) {
+          var aiText = data.ai_response || data.reply;
+          appendMessage(aiText, "ai", data.sender_name || "AI Assistant", data.created_at, data.ui_component);
         }
       } catch (err) {
         hideTyping();
-        console.error("Send message error:", err);
-        appendMessage("Sorry, we could not deliver your message right now. Please try again.", "system");
+        appendMessage("Network communication error. Please try again.", "system", "System");
       }
     }
 
@@ -2497,7 +2780,7 @@
       }
     });
 
-    // Listen for Real-Time bKash Popup PostMessage Events
+    // Listen for Real-Time bKash and EPS Popup PostMessage Events
     window.addEventListener("message", function (event) {
       if (!event || !event.data) return;
 
@@ -2520,7 +2803,7 @@
           `| :--- | :--- |\n` +
           `| **Order Number** | \`${ordNum}\` |\n` +
           `| **bKash TrxID** | \`${trx}\` |\n` +
-          `| **Total Amount Paid** | **৳${Number(amt).toLocaleString()} BDT** |\n` +
+          `| **Total Amount Paid** | **৳${formatCurrency(amt)} BDT** |\n` +
           `| **Payment Status** | ✅ Confirmed & Settled |\n\n` +
           `> 📱 **SMS Confirmation:** Dispatched to customer mobile.\n` +
           `> 🚚 **Next Step:** Our dispatch team is currently packing your parcel!`,
@@ -2538,6 +2821,51 @@
 
             if (titleEl) titleEl.innerHTML = "⚠️ bKash Payment Cancelled";
             if (descEl) descEl.innerHTML = `bKash payment for order #<strong>${ordNum}</strong> was cancelled or closed. You can re-open checkout or switch to <strong>Cash on Delivery (COD)</strong>:`;
+            if (btnSwitch) {
+              btnSwitch.style.background = "#059669";
+              btnSwitch.style.color = "#ffffff";
+              btnSwitch.style.border = "none";
+              btnSwitch.innerHTML = "💵 Switch to Cash on Delivery ➔";
+            }
+          }
+        }
+      } else if (event.data.type === "AIAAS_EPS_PAYMENT_SUCCESS") {
+        var ordNum = event.data.order_number || "ORD-CONFIRMED";
+        var trx = event.data.trx_id || "TRX-VERIFIED";
+        var amt = event.data.amount || "";
+
+        // Remove Pending EPS Card if present in DOM
+        var pendingCard = win.querySelector("#aiaas-pay-card-" + ordNum);
+        if (pendingCard) {
+          if (pendingCard._timerInterval) clearInterval(pendingCard._timerInterval);
+          pendingCard.remove();
+        }
+
+        appendMessage(
+          `### 🧾 EPS Payment Verified & Confirmed\n\n` +
+          `**Status:** 🟢 **PAID & VERIFIED** (EPS Multi-Channel Gateway)\n\n` +
+          `| Invoice Detail | Value |\n` +
+          `| :--- | :--- |\n` +
+          `| **Order Number** | \`${ordNum}\` |\n` +
+          `| **EPS TrxID** | \`${trx}\` |\n` +
+          `| **Total Amount Paid** | **৳${formatCurrency(amt)} BDT** |\n` +
+          `| **Payment Status** | ✅ Confirmed & Settled |\n\n` +
+          `> 📱 **SMS Confirmation:** Dispatched to customer mobile.\n` +
+          `> 🚚 **Next Step:** Our dispatch team is currently packing your parcel!`,
+          "system",
+          "EPS Verified"
+        );
+      } else if (event.data.type === "AIAAS_EPS_PAYMENT_FAILED_OR_CANCELLED") {
+        var ordNum = event.data.order_number;
+        if (ordNum) {
+          var pendingCard = win.querySelector("#aiaas-pay-card-" + ordNum);
+          if (pendingCard) {
+            var titleEl = pendingCard.querySelector("#aiaas-pay-title-" + ordNum);
+            var descEl = pendingCard.querySelector("#aiaas-pay-desc-" + ordNum);
+            var btnSwitch = pendingCard.querySelector("#btn-switch-cod-" + ordNum);
+
+            if (titleEl) titleEl.innerHTML = "⚠️ EPS Payment Cancelled";
+            if (descEl) descEl.innerHTML = `EPS payment for order #<strong>${ordNum}</strong> was cancelled or closed. You can re-open checkout or switch to <strong>Cash on Delivery (COD)</strong>:`;
             if (btnSwitch) {
               btnSwitch.style.background = "#059669";
               btnSwitch.style.color = "#ffffff";

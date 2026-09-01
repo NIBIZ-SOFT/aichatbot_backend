@@ -1,7 +1,7 @@
 import uuid
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, model_validator
 from app.models.all_models import (
     UserRole, SubscriptionTier, SubscriptionStatus,
     ConversationStatus, ConversationPriority, SenderType
@@ -304,8 +304,19 @@ class WidgetInitSession(BaseModel):
 class WidgetMessageSend(BaseModel):
     widget_key: str
     visitor_session_id: str
-    content: str
+    content: Optional[str] = None
+    message: Optional[str] = None
     page_context: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def unify_content(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            raw_text = data.get("content") or data.get("message") or ""
+            text = str(raw_text).strip() if raw_text is not None else ""
+            data["content"] = text
+            data["message"] = text
+        return data
 
 # ---------------- Operations, Subscriptions, Usage ----------------
 class SubscriptionOut(BaseModel):
@@ -617,6 +628,13 @@ class EcommerceSettingsOut(BaseModel):
     bkash_base_url: Optional[str] = "https://tokenized.sandbox.bka.sh/v1.2.0-beta"
     bkash_app_key_masked: Optional[str] = None
     bkash_username_masked: Optional[str] = None
+    eps_enabled: bool = False
+    eps_is_sandbox: bool = True
+    eps_base_url: Optional[str] = "https://sandboxpgapi.eps.com.bd"
+    eps_username_masked: Optional[str] = None
+    eps_merchant_id_masked: Optional[str] = None
+    eps_store_id_masked: Optional[str] = None
+    eps_merchant_number: Optional[str] = None
     delivery_charge_inside_dhaka: float = 60.0
     delivery_charge_outside_dhaka: float = 120.0
     sms_notifications_enabled: bool = True
@@ -639,6 +657,15 @@ class EcommerceSettingsUpdate(BaseModel):
     bkash_app_secret: Optional[str] = None
     bkash_username: Optional[str] = None
     bkash_password: Optional[str] = None
+    eps_enabled: Optional[bool] = None
+    eps_is_sandbox: Optional[bool] = None
+    eps_base_url: Optional[str] = None
+    eps_username: Optional[str] = None
+    eps_password: Optional[str] = None
+    eps_hash_key: Optional[str] = None
+    eps_merchant_id: Optional[str] = None
+    eps_store_id: Optional[str] = None
+    eps_merchant_number: Optional[str] = None
     delivery_charge_inside_dhaka: Optional[float] = None
     delivery_charge_outside_dhaka: Optional[float] = None
     sms_notifications_enabled: Optional[bool] = None

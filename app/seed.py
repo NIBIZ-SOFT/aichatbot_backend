@@ -13,7 +13,7 @@ from app.models.all_models import (
     ApiKey, Webhook, UsageRecord, Notification, AuditLog,
     AIAssistant, KnowledgeBase, KnowledgeChunk, Website, Contact,
     Conversation, ConversationStatus, ConversationPriority, Message, SenderType,
-    Product, Order
+    Product, Order, PlatformSetting, PricingPlan
 )
 
 def utc_now() -> datetime:
@@ -1450,6 +1450,130 @@ STRICT CONCISENESS & TOKEN EFFICIENCY RULES:
             created_at=utc_now() - timedelta(hours=5)
         )
         db.add_all([notif1, notif2, notif3, notif4])
+
+        # -------------------------------------------------------------------------
+        # 5. SEED PLATFORM SETTINGS (AI OPENROUTER GATEWAY + BKASH + EPS PGW)
+        # -------------------------------------------------------------------------
+        platform_settings_to_seed = {
+            "platform_ai_config": {
+                "base_url": "https://openrouter.ai/api/v1",
+                "api_key": "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",
+                "master_model": "google/gemini-2.5-flash",
+                "fallback_model": "google/gemini-2.5-flash-lite",
+                "embedding_model": "text-embedding-004",
+                "temperature": 0.3,
+                "max_tokens": 2048,
+                "system_prompt_prefix": "You are an enterprise AI customer support specialist."
+            },
+            "platform_bkash_config": {
+                "is_sandbox": True,
+                "base_url": "https://tokenized.sandbox.bka.sh/v1.2.0-beta/tokenized",
+                "app_key": "4f6o0cjiki2rfm34kfdadl1eqq",
+                "app_secret": "2is7hdktrekvrbljjh44ll3d9l1dtjo4pasmjvs5vl5qr3fug4b",
+                "username": "sandboxTokenizedUser02",
+                "password": "sandboxTokenizedUser02@12345",
+                "merchant_number": "01837586105"
+            },
+            "platform_eps_config": {
+                "is_sandbox": True,
+                "base_url": "https://sandboxpgapi.eps.com.bd",
+                "username": "Epsdemo@gmail.com",
+                "password": "Epsdemo258@",
+                "hash_key": "FHZxyzeps56789gfhg678ygu876o=",
+                "merchant_id": "29e86e70-0ac6-45eb-ba04-9fcb0aaed12a",
+                "store_id": "d44e705f-9e3a-41de-98b1-1674631637da",
+                "merchant_number": "01700000000"
+            }
+        }
+
+        for p_key, p_val in platform_settings_to_seed.items():
+            existing_ps = (await db.execute(select(PlatformSetting).where(PlatformSetting.key == p_key))).scalars().first()
+            if not existing_ps:
+                db.add(PlatformSetting(key=p_key, value_json=p_val))
+            else:
+                existing_ps.value_json = p_val
+
+        # -------------------------------------------------------------------------
+        # 6. SEED SAAS PRICING PLANS (BDT CURRENCY)
+        # -------------------------------------------------------------------------
+        plans_to_seed = [
+            {
+                "code": "free",
+                "name": "Free Tier",
+                "description": "Essential AI Chatbot for early startups and small shops.",
+                "monthly_price_bdt": 0.0,
+                "annual_price_bdt": 0.0,
+                "monthly_token_limit": 50_000,
+                "monthly_conversation_limit": 100,
+                "max_agents": 1,
+                "max_websites": 1,
+                "max_knowledge_docs": 3,
+                "features": ["1 AI Assistant", "1 Website Widget", "50K Tokens/mo", "Basic Analytics"],
+                "badge_text": "Free Forever",
+                "is_popular": False,
+                "is_active": True,
+                "display_order": 1
+            },
+            {
+                "code": "starter",
+                "name": "Starter Plan",
+                "description": "Professional conversational AI for growing e-commerce businesses.",
+                "monthly_price_bdt": 1490.0,
+                "annual_price_bdt": 14900.0,
+                "monthly_token_limit": 500_000,
+                "monthly_conversation_limit": 2000,
+                "max_agents": 2,
+                "max_websites": 2,
+                "max_knowledge_docs": 15,
+                "features": ["2 AI Assistants", "2 Website Widgets", "500K Tokens/mo", "bKash & EPS Gateways", "Order Tracking AI"],
+                "badge_text": "Best Value",
+                "is_popular": False,
+                "is_active": True,
+                "display_order": 2
+            },
+            {
+                "code": "growth",
+                "name": "Growth Pro",
+                "description": "High-volume AI automation for scaling digital commerce brands.",
+                "monthly_price_bdt": 4990.0,
+                "annual_price_bdt": 49900.0,
+                "monthly_token_limit": 2_500_000,
+                "monthly_conversation_limit": 15000,
+                "max_agents": 5,
+                "max_websites": 5,
+                "max_knowledge_docs": 50,
+                "features": ["5 AI Assistants", "5 Website Widgets", "2.5M Tokens/mo", "Priority Support", "Automated SMS Dispatch", "Custom Branding"],
+                "badge_text": "Most Popular",
+                "is_popular": True,
+                "is_active": True,
+                "display_order": 3
+            },
+            {
+                "code": "enterprise",
+                "name": "Enterprise Suite",
+                "description": "Dedicated LLM infrastructure, custom integrations & unlimited scalability.",
+                "monthly_price_bdt": 19990.0,
+                "annual_price_bdt": 199900.0,
+                "monthly_token_limit": 10_000_000,
+                "monthly_conversation_limit": 100000,
+                "max_agents": 25,
+                "max_websites": 25,
+                "max_knowledge_docs": 500,
+                "features": ["Unlimited Agents & Websites", "10M Tokens/mo", "Dedicated AI Cluster", "Custom Model Fine-tuning", "24/7 SLA Hotline"],
+                "badge_text": "VIP Enterprise",
+                "is_popular": False,
+                "is_active": True,
+                "display_order": 4
+            }
+        ]
+
+        for plan_data in plans_to_seed:
+            existing_plan = (await db.execute(select(PricingPlan).where(PricingPlan.code == plan_data["code"]))).scalars().first()
+            if not existing_plan:
+                db.add(PricingPlan(**plan_data))
+            else:
+                for k, v in plan_data.items():
+                    setattr(existing_plan, k, v)
 
         await db.commit()
         print("[SUCCESS] E-Commerce Database Seeding Successfully Completed (Bangladeshi Format + BDT Taka)!")
