@@ -664,7 +664,7 @@ async def get_usage_summary(
     live_completion = (msg_res.completion_sum or 0) if msg_res else 0
     live_msgs = (msg_res.total_msgs or 0) if msg_res else 0
 
-    # 3. Usage Records Table Aggregation
+    # 3. Usage Records Table & Live Conversation Aggregation
     rec_stmt = select(
         func.sum(UsageRecord.prompt_tokens).label("p_sum"),
         func.sum(UsageRecord.completion_tokens).label("c_sum"),
@@ -678,76 +678,101 @@ async def get_usage_summary(
     rec_msgs = (rec_res.m_sum or 0) if rec_res else 0
     rec_convs = (rec_res.c_count or 0) if rec_res else 0
 
-    # Total calculated tokens
-    prompt_tokens = max(live_prompt + rec_prompt, 1_120_400)
-    completion_tokens = max(live_completion + rec_completion, 743_800)
+    conv_count_stmt = select(func.count(Conversation.id)).where(Conversation.tenant_id == t_id)
+    live_convs = (await db.execute(conv_count_stmt)).scalar() or 0
+
+    # Real calculated token and message metrics
+    prompt_tokens = live_prompt + rec_prompt
+    completion_tokens = live_completion + rec_completion
     total_tokens = prompt_tokens + completion_tokens
-    total_msgs = max(live_msgs + rec_msgs, 1_842)
-    total_convs = max(rec_convs, 312)
+    total_msgs = live_msgs + rec_msgs
+    total_convs = live_convs + rec_convs
 
     # 4. Precision Contracted Pricing Model in BDT
     from app.services.billing.wallet_service import WalletService
     wallet = await WalletService.get_or_create_wallet(db, t_id)
-    token_rate = wallet.per_1k_tokens_rate_bdt
-    cost_bdt = round((total_tokens / 1000.0) * token_rate, 2)
+    token_rate = wallet.per_1k_tokens_rate_bdt or 0.15
+    cost_bdt = round((total_tokens / 1000.0) * token_rate, 2) if total_tokens > 0 else 0.0
     cost_usd = round(cost_bdt / 120.0, 2)
-    usage_pct = round((total_tokens / token_limit) * 100, 2)
+    usage_pct = round((total_tokens / max(token_limit, 1)) * 100, 2)
 
-    # 5. Connected Websites Breakdown
+    # 5. Connected Websites Breakdown (Real aggregated metrics per website)
     sites_res = await db.execute(select(Website).where(Website.tenant_id == t_id))
     sites = sites_res.scalars().all()
     
     websites_breakdown = []
     if sites:
-        weights = [0.55, 0.30, 0.15]
-        for idx, s in enumerate(sites):
-            w = weights[idx] if idx < len(weights) else 0.10
-            s_tokens = int(total_tokens * w)
-            s_cost = round(cost_usd * w, 2)
-            s_convs = int(total_convs * w)
+        for s in sites:
+            site_msg_stmt = (
+                select(
+                    func.sum(Message.prompt_tokens + Message.completion_tokens).label("s_tokens"),
+                    func.count(distinct(Conversation.id)).label("s_convs")
+                )
+                .join(Conversation, Message.conversation_id == Conversation.id)
+                .where(Conversation.website_id == s.id)
+            )
+            site_res = (await db.execute(site_msg_stmt)).one_or_none()
+            s_tok = (site_res.s_tokens or 0) if site_res else 0
+            s_conv = (site_res.s_convs or 0) if site_res else 0
+            s_cost = round((s_tok / 1000.0) * (token_rate / 120.0), 2) if (token_rate and s_tok > 0) else 0.0
             websites_breakdown.append({
                 "website_name": s.name,
                 "domain": s.domain,
-                "tokens": s_tokens,
-                "conversations": s_convs,
+                "tokens": s_tok,
+                "conversations": s_conv,
                 "cost_usd": s_cost
             })
     else:
         websites_breakdown.append({
-            "website_name": "Main Portal",
-            "domain": "padmadigital.example",
+            "website_name": "Default Channel",
+            "domain": "Website Widget",
             "tokens": total_tokens,
             "conversations": total_convs,
             "cost_usd": cost_usd
         })
 
-    # 6. Models Breakdown (Gemini 3.6 Flash / Gemini 1.5 Pro)
+    # 6. Active Model Breakdown
+    from app.services.ai.gemini import gemini_service
+    active_model_name = gemini_service.model or "google/gemini-2.5-flash"
     models_breakdown = [
         {
-            "model": "gemini-3.6-flash",
-            "tokens": int(total_tokens * 0.82),
-            "cost_usd": round(cost_usd * 0.75, 4),
-            "percentage": 82.0
-        },
-        {
-            "model": "gemini-1.5-pro",
-            "tokens": int(total_tokens * 0.18),
-            "cost_usd": round(cost_usd * 0.25, 4),
-            "percentage": 18.0
+            "model": active_model_name,
+            "tokens": total_tokens,
+            "cost_usd": cost_usd,
+            "percentage": 100.0 if total_tokens > 0 else 0.0
         }
     ]
 
-    # 7. Past 7-day Daily History
+    # 7. Past 7-day Daily History (Real aggregated daily token timestamps)
     today = datetime.now(timezone.utc).date()
     daily_history = []
-    day_weights = [0.11, 0.13, 0.12, 0.16, 0.15, 0.17, 0.16]
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    
+    daily_stmt = (
+        select(
+            func.date_trunc('day', Message.created_at).label("msg_day"),
+            func.sum(Message.prompt_tokens).label("day_prompt"),
+            func.sum(Message.completion_tokens).label("day_comp")
+        )
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .where(
+            Conversation.tenant_id == t_id,
+            Message.created_at >= seven_days_ago
+        )
+        .group_by(func.date_trunc('day', Message.created_at))
+    )
+    daily_rows = (await db.execute(daily_stmt)).all()
+    daily_map = {}
+    for r in daily_rows:
+        if r.msg_day:
+            day_key = r.msg_day.date() if hasattr(r.msg_day, 'date') else r.msg_day
+            daily_map[day_key] = (int(r.day_prompt or 0), int(r.day_comp or 0))
+
     for i in range(7):
         d = today - timedelta(days=6 - i)
-        dw = day_weights[i]
-        d_prompt = int((prompt_tokens / 30) * (dw * 7))
-        d_comp = int((completion_tokens / 30) * (dw * 7))
+        d_prompt, d_comp = daily_map.get(d, (0, 0))
         d_total = d_prompt + d_comp
-        d_cost = round((d_prompt * 0.000000075) + (d_comp * 0.00000030), 4)
+        d_cost = round(((d_prompt + d_comp) / 1000.0) * (token_rate / 120.0), 4) if (token_rate and d_total > 0) else 0.0
         daily_history.append({
             "date": d.strftime("%b %d"),
             "prompt_tokens": d_prompt,
