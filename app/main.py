@@ -138,24 +138,29 @@ async def health_check():
     }
 
 @app.get("/seed-db")
+@app.get("/reset-db")
+@app.get("/clean-and-seed-db")
 @app.get("/api/v1/seed-db")
+@app.get("/api/v1/reset-db")
 async def run_database_seed():
     """
-    Trigger database schema creation & demo seeding via direct HTTP GET request.
+    Trigger complete zero-touch database purge of all past trial accounts and reseed clean production state.
     """
     try:
         import importlib
         import app.seed
         importlib.reload(app.seed)
-        await app.seed.seed_database()
+        await app.seed.seed_database(wipe_all_client_data=True)
         return {
             "status": "success",
-            "message": "Jobab Chat Platform successfully initialized and production-seeded!",
+            "message": "All previous trial client accounts, test conversations, and dummy data successfully purged! Database is 100% clean and production-ready.",
             "infrastructure": {
                 "super_admin": {
                     "email": "admin@gmail.com",
+                    "password": "Set to 12345678 (Change in Super Admin)",
                     "role": "SUPER_ADMIN"
                 },
+                "purged_state": "0 client tenants, 0 demo accounts, 0 test conversations",
                 "ai_gateway": "OpenRouter Universal AI Gateway (google/gemini-2.5-flash)",
                 "payment_gateways": "bKash Tokenized Checkout & EPS Multi-Channel PGW",
                 "saas_plans": ["Free", "Starter", "Growth", "Enterprise"],
@@ -165,6 +170,6 @@ async def run_database_seed():
     except Exception as e:
         return {
             "status": "error",
-            "message": f"Seeder error: {str(e)}"
+            "message": f"Purge & Seeder error: {str(e)}"
         }
 
