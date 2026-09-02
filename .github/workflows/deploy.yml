@@ -22,10 +22,11 @@ jobs:
           script: |
             # Navigate to the project directory on your server
             # IMPORTANT: Update this path to where your project is located on the VPS!
-            cd /root/aichat-backend.npms.pro
+            cd /home/npms.pro/public_html/aichat-backend.npms.pro/
             
-            # Pull the latest changes from the main branch
-            git pull origin main
+            # Force pull the latest changes from the main branch to ensure the server updates
+            git fetch --all
+            git reset --hard origin/main
             
             # Rebuild and restart the Docker containers
             docker compose up --build -d
