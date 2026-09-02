@@ -77,7 +77,7 @@ async def get_system_diagnostics():
             ps_eps_res = await conn.execute(text("SELECT count(*) FROM platform_settings WHERE key = 'platform_eps_config';"))
             has_eps_config = (ps_eps_res.scalar() or 0) > 0
 
-            is_seeded = bool(superadmin_ready and pricing_plans_count >= 4 and has_ai_config and tenant_count > 0)
+            is_seeded = bool(superadmin_ready and pricing_plans_count >= 4 and has_ai_config)
             report["is_fully_seeded"] = is_seeded
 
             report["components"]["database"] = {
@@ -91,13 +91,13 @@ async def get_system_diagnostics():
                 "pricing_plans_count": pricing_plans_count,
                 "is_seeded": is_seeded,
                 "connection_pool": "SQLAlchemy Asyncpg",
-                "message": "PostgreSQL database is online with all tables and seeded schemas ready." if is_seeded else "Database connected, but seeder has not run yet. Run 'python app/seed.py'."
+                "message": "PostgreSQL database is online with all tables, super admin account, and core platform settings ready." if is_seeded else "Database connected, but seeder has not run yet. Run 'python app/seed.py'."
             }
             if not is_seeded:
                 report["health_score_percent"] -= 15
                 report["fix_recommendations"].append({
                     "component": "Database Seeder",
-                    "issue": "Database tables exist but demo data & superadmin are not seeded",
+                    "issue": "Database tables exist but super admin and platform settings are not seeded",
                     "solution": "Execute seeder via 'python app/seed.py' or click 'Run Database Seeder' below."
                 })
     except Exception as e:
@@ -244,6 +244,21 @@ async def ping_ai():
             "error": str(e),
             "message": f"AI Ping failed: {str(e)}"
         }
+
+@router.get("/version", summary="Deployment & Build Version Info")
+async def get_system_version():
+    """
+    Returns deployment build version, active AI model, and runtime mode for quick verification.
+    """
+    return {
+        "service": getattr(settings, "PROJECT_NAME", "Jobab Chat Enterprise Platform"),
+        "version": "1.0.0-production",
+        "environment": getattr(settings, "ENVIRONMENT", "production"),
+        "active_ai_model": gemini_service.model or "google/gemini-2.5-flash",
+        "ai_gateway": "OpenRouter AI Universal Gateway (https://openrouter.ai/api/v1)",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "status": "deployed_and_ready"
+    }
 
 @router.post("/seed-db", summary="Run Database Seeder via HTTP")
 async def trigger_seed_database():
