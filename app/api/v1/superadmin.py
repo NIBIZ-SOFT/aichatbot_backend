@@ -472,8 +472,6 @@ async def get_global_revenue_breakdown(
             ))
 
     total_mrr = sum(tier_counts[t] * tier_pricing[t] for t in tier_pricing.keys())
-    if total_mrr == 0:
-        total_mrr = len(results) * 49990.0 # Baseline fallback
 
     tier_breakdown_list = [
         TierRevenueItem(
