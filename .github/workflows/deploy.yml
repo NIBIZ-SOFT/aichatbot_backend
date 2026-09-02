@@ -16,9 +16,9 @@ jobs:
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: npms.pro
-          username: root
-          password: RsmMonaem66@@
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
           script: |
             cd /home/npms.pro/public_html/aichat-backend.npms.pro/
             git fetch --all
