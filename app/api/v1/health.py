@@ -284,17 +284,19 @@ async def get_system_version():
         "status": "deployed_and_ready"
     }
 
-@router.post("/seed-db", summary="Run Database Seeder via HTTP")
+@router.post("/seed-db")
+@router.post("/reset-db")
+@router.get("/reset-db")
 async def trigger_seed_database():
     """
-    Executes database seeder script to populate Super Admin, Platform AI Settings, bKash & EPS PGW, and SaaS Plans.
+    Executes database purge and seeder script to wipe all trial data and populate Super Admin, Platform AI Settings, bKash & EPS PGW, and SaaS Plans.
     """
     try:
         from app.seed import seed_database
-        await seed_database()
+        await seed_database(wipe_all_client_data=True)
         return {
             "status": "success",
-            "message": "Database successfully initialized and seeded! Super Admin account 'admin@gmail.com' (password: 12345678), OpenRouter AI configs, and SaaS plans are ready."
+            "message": "Database successfully purged of all trial data and initialized! Master Super Admin account 'admin@gmail.com' (password: 12345678), OpenRouter AI configs, and SaaS plans are ready."
         }
     except Exception as e:
         raise HTTPException(

@@ -19,21 +19,20 @@ from app.models.all_models import (
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
-async def seed_database():
+async def seed_database(wipe_all_client_data: bool = True):
     """
-    Official Production Database Seeder for Jobab Chat Enterprise Platform.
-    Seeds only core infrastructure:
-    - Dynamic column migrations
-    - Master Super Admin user (admin@gmail.com)
-    - Platform Settings (OpenRouter Universal Gateway, bKash PGW, EPS PGW)
-    - SaaS Subscription Pricing Plans (Free, Starter, Growth, Enterprise)
-    - Official Promotional Coupons
-    - Cleans all legacy dummy/demo tenants so production starts with zero noise.
+    Official Production Database Seeder & Purge Tool for Jobab Chat Enterprise Platform.
+    1. Runs dynamic column migrations without dropping tables.
+    2. Purges all past test/trial client tenants, staff users, products, conversations, and orders.
+    3. Initializes Master Super Admin user (admin@gmail.com / 12345678).
+    4. Sets up Platform Settings (OpenRouter Universal Gateway, bKash PGW, EPS PGW).
+    5. Seeds 4 SaaS Subscription Pricing Plans (Free, Starter, Growth, Enterprise).
+    6. Seeds Official Promotional Coupons (WELCOME50, LAUNCH2026).
     """
-    print("=== [PRODUCTION SEEDER] Initializing Jobab Chat Platform Core Infrastructure... ===")
+    print(f"=== [PRODUCTION SEEDER] Initializing Jobab Chat Core Infrastructure (Purge All Test Clients: {wipe_all_client_data})... ===")
     
     async with AsyncSessionLocal() as db:
-        # 1. Run dynamic column migrations
+        # 1. Run dynamic column migrations (preserving table structure)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
             await conn.execute(text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS business_category VARCHAR(50) DEFAULT 'ecommerce';"))
@@ -56,29 +55,37 @@ async def seed_database():
             await conn.execute(text("ALTER TABLE tenant_wallets ADD COLUMN IF NOT EXISTS contract_locked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();"))
             await conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata_json JSONB DEFAULT '{}'::jsonb;"))
 
-        # 2. Clean legacy demo tenants from previous test runs
-        legacy_demo_slugs = [
-            "padma-mart", "apex-erp-cloud", "horizon-retail", "padma-digital-solutions", "acme-digital-solutions", 
-            "daraz-seller-bd", "aarong-lifestyle", "chaldal-quick", "pickaboo-gadgets", "rokomari-books"
-        ]
-        for s in legacy_demo_slugs:
-            existing_tenant_res = await db.execute(select(Tenant).where(Tenant.slug == s))
-            existing_tenant = existing_tenant_res.scalars().first()
-            if existing_tenant:
-                print(f"[CLEANUP] Removing legacy demo tenant '{s}'...")
-                await db.delete(existing_tenant)
+        # 2. Complete Clean Purge of all previous test/trial client tenants and accounts
+        if wipe_all_client_data:
+            print("[RESET] Purging all previous trial client tenants, accounts, and demo data from PostgreSQL...")
+            try:
+                await db.execute(text("DELETE FROM messages;"))
+                await db.execute(text("DELETE FROM conversations;"))
+                await db.execute(text("DELETE FROM orders;"))
+                await db.execute(text("DELETE FROM products;"))
+                await db.execute(text("DELETE FROM knowledge_chunks;"))
+                await db.execute(text("DELETE FROM knowledge_bases;"))
+                await db.execute(text("DELETE FROM ai_assistants;"))
+                await db.execute(text("DELETE FROM websites;"))
+                await db.execute(text("DELETE FROM contacts;"))
+                await db.execute(text("DELETE FROM usage_records;"))
+                await db.execute(text("DELETE FROM audit_logs;"))
+                await db.execute(text("DELETE FROM notifications;"))
+                await db.execute(text("DELETE FROM wallet_transactions;"))
+                await db.execute(text("DELETE FROM tenant_wallets;"))
+                await db.execute(text("DELETE FROM coupon_redemptions;"))
+                await db.execute(text("DELETE FROM api_keys;"))
+                await db.execute(text("DELETE FROM webhooks;"))
+                await db.execute(text("DELETE FROM subscriptions;"))
+                # Delete all non-admin users (all test/trial accounts)
+                await db.execute(text("DELETE FROM users WHERE role != 'super_admin' AND email != 'admin@gmail.com';"))
+                # Delete all tenants
+                await db.execute(text("DELETE FROM tenants;"))
                 await db.commit()
-
-        # Clean demo client emails from test runs
-        demo_emails_to_clean = [
-            "ecommerceclient1@gmail.com", "erpclient1@gmail.com", "ecommerceclient2@gmail.com",
-            "nusrat.support@padmadigital.example", "ariful.sales@padmadigital.example",
-            "mahmud.tech@padmadigital.example", "sumaiya.analytics@padmadigital.example",
-            "tanvir.sales@apexerp.example", "farhana.finance@apexerp.example",
-            "kamal.lead@horizonretail.example", "sabrina.sales@horizonretail.example"
-        ]
-        await db.execute(delete(User).where(User.email.in_(demo_emails_to_clean)))
-        await db.commit()
+                print("[RESET] All test client accounts and tenants successfully purged!")
+            except Exception as e:
+                print(f"[RESET WARNING] Partial cleanup error: {e}")
+                await db.rollback()
 
         # 3. Seed Master Super Admin Account
         admin_res = await db.execute(select(User).where(User.email == "admin@gmail.com"))
