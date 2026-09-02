@@ -150,24 +150,16 @@ async def run_database_seed():
         await app.seed.seed_database()
         return {
             "status": "success",
-            "message": "Database successfully created and seeded with Bangladeshi E-Commerce demo data!",
-            "credentials": {
+            "message": "Jobab Chat Platform successfully initialized and production-seeded!",
+            "infrastructure": {
                 "super_admin": {
                     "email": "admin@gmail.com",
-                    "password": "12345678"
+                    "role": "SUPER_ADMIN"
                 },
-                "demo_client": {
-                    "email": "client@gmail.com",
-                    "password": "12345678"
-                },
-                "support_agent": {
-                    "email": "nusrat.support@padmadigital.example",
-                    "password": "12345678"
-                },
-                "sales_agent": {
-                    "email": "ariful.sales@padmadigital.example",
-                    "password": "12345678"
-                }
+                "ai_gateway": "OpenRouter Universal AI Gateway (google/gemini-2.5-flash)",
+                "payment_gateways": "bKash Tokenized Checkout & EPS Multi-Channel PGW",
+                "saas_plans": ["Free", "Starter", "Growth", "Enterprise"],
+                "coupons": ["WELCOME50", "LAUNCH2026"]
             }
         }
     except Exception as e:
