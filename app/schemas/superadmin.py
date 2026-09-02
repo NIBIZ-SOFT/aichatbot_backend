@@ -49,6 +49,10 @@ class BillingTransactionItem(BaseModel):
     payment_method: str
     status: str
     invoice_number: str
+    tenant_id: Optional[str] = None
+    tenant_email: Optional[str] = None
+    monthly_token_limit: Optional[int] = None
+    billing_cycle: Optional[str] = "Monthly"
 
 class RevenueBreakdownOut(BaseModel):
     total_mrr_bdt: float

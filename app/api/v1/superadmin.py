@@ -437,7 +437,7 @@ async def get_global_revenue_breakdown(
     db: AsyncSession = Depends(get_db)
 ):
     """Calculates MRR, ARR, and subscriber distribution in Bangladeshi Taka (BDT ৳)."""
-    sub_stmt = select(Subscription, Tenant.name.label("tenant_name")).join(Tenant, Subscription.tenant_id == Tenant.id)
+    sub_stmt = select(Subscription, Tenant).join(Tenant, Subscription.tenant_id == Tenant.id).order_by(desc(Subscription.created_at))
     results = (await db.execute(sub_stmt)).all()
 
     tier_pricing = {
@@ -455,20 +455,25 @@ async def get_global_revenue_breakdown(
     }
 
     recent_txs = []
-    for sub, t_name in results:
+    for sub, tenant in results:
         tier_counts[sub.tier] = tier_counts.get(sub.tier, 0) + (1 if sub.status == SubscriptionStatus.ACTIVE else 0)
-        # Generate clean transaction records
-        price = tier_pricing.get(sub.tier, 4990.0)
+        # Use custom deal price if locked, otherwise fallback to official tier price
+        price = sub.locked_price_bdt if (sub.locked_price_bdt and sub.locked_price_bdt > 0) else tier_pricing.get(sub.tier, 4990.0)
         if price > 0:
+            support_email = tenant.branding_config.get("support_email") if tenant.branding_config else None
             recent_txs.append(BillingTransactionItem(
                 id=f"TXN-{str(sub.id)[:8].upper()}",
-                tenant_name=t_name,
+                tenant_name=tenant.name,
                 tier=sub.tier.value.capitalize(),
                 amount_bdt=price,
                 date=sub.created_at,
-                payment_method="bKash / Nagad Direct Merchant",
+                payment_method="bKash Merchant Direct (Auto-Debit)",
                 status="Paid & Verified",
-                invoice_number=f"INV-2026-{str(sub.id)[:6].upper()}"
+                invoice_number=f"INV-2026-{str(sub.id)[:6].upper()}",
+                tenant_id=str(tenant.id),
+                tenant_email=support_email,
+                monthly_token_limit=sub.monthly_token_limit,
+                billing_cycle=sub.billing_cycle.value.capitalize()
             ))
 
     total_mrr = sum(tier_counts[t] * tier_pricing[t] for t in tier_pricing.keys())
