@@ -55,37 +55,29 @@ async def seed_database(wipe_all_client_data: bool = True):
             await conn.execute(text("ALTER TABLE tenant_wallets ADD COLUMN IF NOT EXISTS contract_locked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();"))
             await conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata_json JSONB DEFAULT '{}'::jsonb;"))
 
-        # 2. Complete Clean Purge of all previous test/trial client tenants and accounts
+        # 2. Complete Atomic Purge of all previous test/trial client tenants and accounts
         if wipe_all_client_data:
             print("[RESET] Purging all previous trial client tenants, accounts, and demo data from PostgreSQL...")
-            try:
-                await db.execute(text("DELETE FROM messages;"))
-                await db.execute(text("DELETE FROM conversations;"))
-                await db.execute(text("DELETE FROM orders;"))
-                await db.execute(text("DELETE FROM products;"))
-                await db.execute(text("DELETE FROM knowledge_chunks;"))
-                await db.execute(text("DELETE FROM knowledge_bases;"))
-                await db.execute(text("DELETE FROM ai_assistants;"))
-                await db.execute(text("DELETE FROM websites;"))
-                await db.execute(text("DELETE FROM contacts;"))
-                await db.execute(text("DELETE FROM usage_records;"))
-                await db.execute(text("DELETE FROM audit_logs;"))
-                await db.execute(text("DELETE FROM notifications;"))
-                await db.execute(text("DELETE FROM wallet_transactions;"))
-                await db.execute(text("DELETE FROM tenant_wallets;"))
-                await db.execute(text("DELETE FROM coupon_redemptions;"))
-                await db.execute(text("DELETE FROM api_keys;"))
-                await db.execute(text("DELETE FROM webhooks;"))
-                await db.execute(text("DELETE FROM subscriptions;"))
-                # Delete all non-admin users (all test/trial accounts)
-                await db.execute(text("DELETE FROM users WHERE role != 'super_admin' AND email != 'admin@gmail.com';"))
-                # Delete all tenants
-                await db.execute(text("DELETE FROM tenants;"))
-                await db.commit()
-                print("[RESET] All test client accounts and tenants successfully purged!")
-            except Exception as e:
-                print(f"[RESET WARNING] Partial cleanup error: {e}")
-                await db.rollback()
+            async with engine.begin() as conn:
+                try:
+                    tables_to_truncate = [
+                        "messages", "conversations", "orders", "products",
+                        "knowledge_chunks", "knowledge_bases", "ai_assistants",
+                        "websites", "contacts", "usage_records", "audit_logs",
+                        "notifications", "wallet_transactions", "tenant_wallets",
+                        "coupon_redemptions", "api_keys", "webhooks", "subscriptions",
+                        "users", "tenants"
+                    ]
+                    await conn.execute(text(f"TRUNCATE TABLE {', '.join(tables_to_truncate)} CASCADE;"))
+                    print("[RESET] All test client accounts, tenants, and sessions successfully truncated!")
+                except Exception as e:
+                    print(f"[RESET WARNING] Truncate fallback: {e}")
+                    # Fallback individual deletes
+                    for tbl in ["messages", "conversations", "orders", "products", "knowledge_chunks", "knowledge_bases", "ai_assistants", "websites", "contacts", "usage_records", "audit_logs", "notifications", "wallet_transactions", "tenant_wallets", "coupon_redemptions", "api_keys", "webhooks", "subscriptions", "users", "tenants"]:
+                        try:
+                            await conn.execute(text(f"DELETE FROM {tbl};"))
+                        except Exception:
+                            pass
 
         # 3. Seed Master Super Admin Account
         admin_res = await db.execute(select(User).where(User.email == "admin@gmail.com"))
