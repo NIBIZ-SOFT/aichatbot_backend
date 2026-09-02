@@ -279,6 +279,7 @@ class PricingService:
             "pay_as_you_go_enabled": True,
             "custom_slider_builder_enabled": True,
             "min_wallet_topup_bdt": 100.0,
+            "annual_discount_percentage": 15.0,
             "base_custom_platform_fee_bdt": 1990.0,
             "per_extra_agent_bdt": 750.0,
             "per_extra_website_bdt": 1200.0
