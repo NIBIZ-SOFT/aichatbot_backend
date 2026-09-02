@@ -136,7 +136,7 @@ async def public_widget_order_checkout(
         ai_msg = Message(
             conversation_id=conv.id,
             sender_type=SenderType.SYSTEM,
-            sender_name="Padma Mart Order Desk",
+            sender_name=f"{tenant.name} Order Desk",
             content=chat_msg_text,
             prompt_tokens=0,
             completion_tokens=0,
