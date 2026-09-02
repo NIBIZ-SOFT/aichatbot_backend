@@ -117,6 +117,30 @@ async def get_system_diagnostics():
         })
 
     # 2. AI Engine (OpenRouter Universal Gateway) Configuration Check
+    if not gemini_service.api_key:
+        try:
+            async with engine.connect() as conn:
+                ai_setting_res = await conn.execute(text("SELECT value_json FROM platform_settings WHERE key = 'platform_ai_config' LIMIT 1;"))
+                row = ai_setting_res.first()
+                if row and row[0]:
+                    val = row[0]
+                    if isinstance(val, str):
+                        import json
+                        val = json.loads(val)
+                    if isinstance(val, dict) and val.get("gateway_api_key"):
+                        gemini_service.update_config(
+                            api_key=val.get("gateway_api_key"),
+                            base_url=val.get("base_url", "https://openrouter.ai/api/v1"),
+                            master_model=val.get("master_model", "google/gemini-2.5-flash"),
+                            fallback_model=val.get("fallback_model", "google/gemini-2.5-flash-lite"),
+                            embedding_model=val.get("embedding_model", "text-embedding-004"),
+                            temperature=float(val.get("temperature", 0.3)),
+                            max_tokens=int(val.get("max_output_tokens", 2048)),
+                            system_instruction=val.get("system_instruction_baseline", "")
+                        )
+        except Exception:
+            pass
+
     ai_cfg = gemini_service.get_config()
     api_key_configured = bool(ai_cfg.get("api_key"))
     master_model = ai_cfg.get("master_model", "google/gemini-2.5-flash")
