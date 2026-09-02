@@ -13,6 +13,15 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Copy files to VPS via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: npms.pro
+          username: root
+          password: RsmMonaem66@@
+          source: "."
+          target: "/home/npms.pro/public_html/aichat-backend.npms.pro/"
+
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -20,13 +29,7 @@ jobs:
           username: root
           password: RsmMonaem66@@
           script: |
-            # Navigate to the project directory on your server
-            # IMPORTANT: Update this path to where your project is located on the VPS!
             cd /home/npms.pro/public_html/aichat-backend.npms.pro/
-            
-            # Force pull the latest changes from the main branch to ensure the server updates
-            git fetch --all
-            git reset --hard origin/main
             
             # Rebuild and restart the Docker containers
             docker compose up --build -d
