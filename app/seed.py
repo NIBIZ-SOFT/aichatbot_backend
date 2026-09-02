@@ -327,23 +327,25 @@ async def seed_database():
         coupons_data = [
             {
                 "code": "WELCOME50",
+                "description": "50% Discount on First Month Subscription",
                 "discount_type": "percentage",
                 "discount_value": 50.0,
-                "max_discount_bdt": 5000.0,
-                "min_spend_bdt": 1000.0,
-                "max_uses": 500,
+                "max_discount_amount_bdt": 5000.0,
+                "min_purchase_amount_bdt": 1000.0,
+                "max_redemptions": 500,
                 "is_active": True,
-                "expires_at": utc_now() + timedelta(days=365)
+                "valid_until": utc_now() + timedelta(days=365)
             },
             {
                 "code": "LAUNCH2026",
+                "description": "20% Discount for Early Platform Adopters",
                 "discount_type": "percentage",
                 "discount_value": 20.0,
-                "max_discount_bdt": 10000.0,
-                "min_spend_bdt": 0.0,
-                "max_uses": 1000,
+                "max_discount_amount_bdt": 10000.0,
+                "min_purchase_amount_bdt": 0.0,
+                "max_redemptions": 1000,
                 "is_active": True,
-                "expires_at": utc_now() + timedelta(days=365)
+                "valid_until": utc_now() + timedelta(days=365)
             }
         ]
 
@@ -355,13 +357,15 @@ async def seed_database():
                 new_c = Coupon(
                     id=uuid.uuid4(),
                     code=c_data["code"],
+                    description=c_data["description"],
                     discount_type=c_data["discount_type"],
                     discount_value=c_data["discount_value"],
-                    max_discount_bdt=c_data["max_discount_bdt"],
-                    min_spend_bdt=c_data["min_spend_bdt"],
-                    max_uses=c_data["max_uses"],
+                    max_discount_amount_bdt=c_data["max_discount_amount_bdt"],
+                    min_purchase_amount_bdt=c_data["min_purchase_amount_bdt"],
+                    max_redemptions=c_data["max_redemptions"],
                     is_active=c_data["is_active"],
-                    expires_at=c_data["expires_at"],
+                    valid_from=utc_now(),
+                    valid_until=c_data["valid_until"],
                     created_at=utc_now()
                 )
                 db.add(new_c)
