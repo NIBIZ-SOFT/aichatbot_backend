@@ -575,59 +575,85 @@ async def list_subscription_invoices(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Returns past billing invoices with receipt metadata."""
-    t_stmt = select(Tenant).where(Tenant.id == user.tenant_id)
-    tenant = (await db.execute(t_stmt)).scalars().first()
-    t_name = tenant.name if tenant else "Client Organization"
+    """
+    Returns authentic past billing invoices and verified payment transaction receipts from PostgreSQL.
+    Extracts real transactions from AuditLog (bKash/EPS subscription payments) and WalletTransaction.
+    """
+    if not user.tenant_id:
+        return []
 
-    sub_stmt = select(Subscription).where(Subscription.tenant_id == user.tenant_id)
-    sub = (await db.execute(sub_stmt)).scalars().first()
-    tier_str = sub.tier.value.capitalize() if sub else "Enterprise"
+    invoices: List[InvoiceItemOut] = []
 
-    tier_prices = {
-        "Free": 0.0,
-        "Starter": 4990.0,
-        "Growth": 19990.0,
-        "Enterprise": 49990.0
-    }
-    price = tier_prices.get(tier_str, 49990.0)
-
-    now = datetime.now(timezone.utc)
-    invoices = [
-        InvoiceItemOut(
-            id="inv-aug-2026",
-            invoice_number=f"INV-2026-AUG-{str(user.tenant_id)[:4].upper()}",
-            date=now - timedelta(days=1),
-            plan_name=f"{tier_str} Package",
-            billing_cycle="Monthly (Aug 2026)",
-            amount_bdt=price,
-            payment_method="bKash Merchant Direct (Auto-Debit)",
-            status="Paid & Verified",
-            receipt_url="#"
-        ),
-        InvoiceItemOut(
-            id="inv-jul-2026",
-            invoice_number=f"INV-2026-JUL-{str(user.tenant_id)[:4].upper()}",
-            date=now - timedelta(days=31),
-            plan_name=f"{tier_str} Package",
-            billing_cycle="Monthly (Jul 2026)",
-            amount_bdt=price,
-            payment_method="bKash Merchant Direct (Auto-Debit)",
-            status="Paid & Verified",
-            receipt_url="#"
-        ),
-        InvoiceItemOut(
-            id="inv-jun-2026",
-            invoice_number=f"INV-2026-JUN-{str(user.tenant_id)[:4].upper()}",
-            date=now - timedelta(days=61),
-            plan_name=f"{tier_str} Package",
-            billing_cycle="Monthly (Jun 2026)",
-            amount_bdt=price,
-            payment_method="Nagad Direct Pay",
-            status="Paid & Verified",
-            receipt_url="#"
+    # 1. Fetch real subscription payment logs from AuditLog
+    audit_stmt = (
+        select(AuditLog)
+        .where(
+            AuditLog.tenant_id == user.tenant_id,
+            AuditLog.action.in_(["payment.bkash_success", "payment.eps_success", "subscription.created", "subscription.upgraded"])
         )
-    ]
+        .order_by(desc(AuditLog.created_at))
+    )
+    audit_rows = (await db.execute(audit_stmt)).scalars().all()
+
+    for audit in audit_rows:
+        meta = audit.metadata_json or {}
+        trx_id = meta.get("trxID") or meta.get("merchant_transaction_id") or meta.get("paymentID") or str(audit.id)[:8].upper()
+        amount_raw = meta.get("amount_bdt") or meta.get("amount") or 0.0
+        try:
+            amount_bdt = float(amount_raw)
+        except (ValueError, TypeError):
+            amount_bdt = 0.0
+
+        plan_name = meta.get("tier") or meta.get("plan_name") or "Standard Plan"
+        billing_cycle = meta.get("billing_cycle") or "Monthly"
+        gateway = "bKash Tokenized Checkout" if "bkash" in audit.action.lower() else ("EPS Multi-Channel PGW" if "eps" in audit.action.lower() else "Platform Direct")
+
+        inv_num = f"INV-{audit.created_at.strftime('%Y%m')}-{str(trx_id)[-6:].upper()}"
+
+        invoices.append(
+            InvoiceItemOut(
+                id=str(audit.id),
+                invoice_number=inv_num,
+                date=audit.created_at,
+                plan_name=f"{str(plan_name).capitalize()} Package",
+                billing_cycle=f"{str(billing_cycle).capitalize()} ({audit.created_at.strftime('%b %Y')})",
+                amount_bdt=amount_bdt,
+                payment_method=gateway,
+                status="Paid & Verified",
+                receipt_url="#"
+            )
+        )
+
+    # 2. Fetch real Wallet Topup Transactions
+    wallet_stmt = (
+        select(WalletTransaction)
+        .where(
+            WalletTransaction.tenant_id == user.tenant_id,
+            WalletTransaction.transaction_type == WalletTransactionType.TOPUP
+        )
+        .order_by(desc(WalletTransaction.created_at))
+    )
+    wallet_rows = (await db.execute(wallet_stmt)).scalars().all()
+
+    for w_tx in wallet_rows:
+        trx_id = w_tx.trx_id or str(w_tx.id)[:8].upper()
+        inv_num = f"INV-TOPUP-{w_tx.created_at.strftime('%Y%m')}-{str(trx_id)[-6:].upper()}"
+        invoices.append(
+            InvoiceItemOut(
+                id=str(w_tx.id),
+                invoice_number=inv_num,
+                date=w_tx.created_at,
+                plan_name="AI Wallet Balance Credit",
+                billing_cycle=f"Prepaid Credit ({w_tx.created_at.strftime('%b %Y')})",
+                amount_bdt=float(w_tx.amount_bdt),
+                payment_method=f"{w_tx.payment_method or 'Digital Gateway'} Deposit",
+                status="Paid & Verified",
+                receipt_url="#"
+            )
+        )
+
+    # Sort all invoices descending by date
+    invoices.sort(key=lambda x: x.date, reverse=True)
     return invoices
 
 @router.get("/usage/history", response_model=List[UsageRecordOut])
