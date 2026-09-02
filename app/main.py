@@ -90,12 +90,28 @@ async def root():
     return {
         "status": "healthy",
         "service": settings.PROJECT_NAME,
+        "version": "1.0.0-production",
         "health": "/health",
+        "version_endpoint": "/version",
         "seed_database": "/seed-db",
         "docs": f"{settings.API_V1_STR}/docs",
         "api_v1": f"{settings.API_V1_STR}",
         "widget_script": "/static/widget.js",
         "demo_page": "/static/demo.html"
+    }
+
+@app.get("/version")
+async def version_check():
+    from datetime import datetime, timezone
+    from app.services.ai.gemini import gemini_service
+    return {
+        "service": settings.PROJECT_NAME,
+        "version": "1.0.0-production",
+        "environment": settings.ENVIRONMENT,
+        "active_ai_model": gemini_service.model or "google/gemini-2.5-flash",
+        "ai_gateway": "OpenRouter AI Universal Gateway",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "status": "re-deployed_and_online"
     }
 
 @app.get("/health")
