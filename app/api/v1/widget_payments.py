@@ -128,7 +128,7 @@ async def public_widget_bkash_init(
     db.add(new_order)
     await db.flush()
 
-    callback_url = f"http://127.0.0.1:8000/api/v1/public/widget/orders/bkash/callback?order_id={new_order.id}&widget_key={payload.widget_key}&session={payload.visitor_session_id}"
+    callback_url = f"https://aichat-backend.npms.pro/api/v1/public/widget/orders/bkash/callback?order_id={new_order.id}&widget_key={payload.widget_key}&session={payload.visitor_session_id}"
 
     # Generate bKash Session via tenant's isolated bKash service
     payment_data = await tenant_bkash.create_payment(
@@ -189,7 +189,7 @@ async def public_widget_bkash_retry(
             "bkash_trx_id": order.bkash_trx_id
         }
 
-    callback_url = f"http://127.0.0.1:8000/api/v1/public/widget/orders/bkash/callback?order_id={order.id}&widget_key={payload.widget_key}&session={payload.visitor_session_id}"
+    callback_url = f"https://aichat-backend.npms.pro/api/v1/public/widget/orders/bkash/callback?order_id={order.id}&widget_key={payload.widget_key}&session={payload.visitor_session_id}"
 
     payment_data = await tenant_bkash.create_payment(
         amount=order.total_amount,
