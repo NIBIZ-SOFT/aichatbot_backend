@@ -30,6 +30,7 @@ async def lifespan(app: FastAPI):
         await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS locked_token_limit INTEGER DEFAULT 500000;"))
         await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS is_custom_deal BOOLEAN DEFAULT FALSE;"))
         await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS deal_notes VARCHAR(500);"))
+        await conn.execute(text("ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS billing_cycle VARCHAR(32) DEFAULT 'monthly';"))
         await conn.execute(text("ALTER TABLE tenant_wallets ADD COLUMN IF NOT EXISTS is_custom_rate BOOLEAN DEFAULT FALSE;"))
         await conn.execute(text("ALTER TABLE tenant_wallets ADD COLUMN IF NOT EXISTS contract_locked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();"))
 
@@ -73,15 +74,52 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
+# CORS configuration supporting jobab.chat, npms.pro, and all subdomains
+cors_origins = [
+    "https://jobab.chat",
+    "https://www.jobab.chat",
+    "http://jobab.chat",
+    "http://www.jobab.chat",
+    "https://npms.pro",
+    "https://www.npms.pro",
+    "https://aichat.npms.pro",
+    "https://aichat-backend.npms.pro",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"]
 )
+
+@app.middleware("http")
+async def cors_exception_middleware(request, call_next):
+    try:
+        response = await call_next(request)
+        return response
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        from fastapi.responses import JSONResponse
+        origin = request.headers.get("origin") or "*"
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Internal Server Error: {str(exc)}"},
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+            }
+        )
 
 # Disable caching for static files in development
 @app.middleware("http")

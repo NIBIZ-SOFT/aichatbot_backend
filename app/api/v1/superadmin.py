@@ -461,6 +461,10 @@ async def get_global_revenue_breakdown(
         price = sub.locked_price_bdt if (sub.locked_price_bdt and sub.locked_price_bdt > 0) else tier_pricing.get(sub.tier, 4990.0)
         if price > 0:
             support_email = tenant.branding_config.get("support_email") if tenant.branding_config else None
+            b_cycle = getattr(sub, "billing_cycle", "monthly")
+            if hasattr(b_cycle, "value"):
+                b_cycle = b_cycle.value
+            b_cycle_str = (b_cycle or "monthly").capitalize()
             recent_txs.append(BillingTransactionItem(
                 id=f"TXN-{str(sub.id)[:8].upper()}",
                 tenant_name=tenant.name,
@@ -473,7 +477,7 @@ async def get_global_revenue_breakdown(
                 tenant_id=str(tenant.id),
                 tenant_email=support_email,
                 monthly_token_limit=sub.monthly_token_limit,
-                billing_cycle=sub.billing_cycle.value.capitalize()
+                billing_cycle=b_cycle_str
             ))
 
     total_mrr = sum(tier_counts[t] * tier_pricing[t] for t in tier_pricing.keys())

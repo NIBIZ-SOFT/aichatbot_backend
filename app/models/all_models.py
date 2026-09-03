@@ -125,6 +125,7 @@ class Subscription(Base):
     tier: Mapped[SubscriptionTier] = mapped_column(Enum(SubscriptionTier), default=SubscriptionTier.FREE)
     plan_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True) # e.g. 'starter', 'eid_mega_2026'
     status: Mapped[SubscriptionStatus] = mapped_column(Enum(SubscriptionStatus), default=SubscriptionStatus.ACTIVE)
+    billing_cycle: Mapped[str] = mapped_column(String(32), default="monthly")
     
     monthly_token_limit: Mapped[int] = mapped_column(Integer, default=500_000)
     monthly_conversation_limit: Mapped[int] = mapped_column(Integer, default=200)
