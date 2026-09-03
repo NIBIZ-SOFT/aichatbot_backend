@@ -1989,6 +1989,128 @@
       return card;
     }
 
+    function renderPricingPlansCard(plans) {
+      if (!plans || !plans.length) return null;
+      var container = document.createElement("div");
+      container.className = "aiaas-plans-container";
+      container.style.marginTop = "8px";
+      container.style.display = "flex";
+      container.style.flexDirection = "column";
+      container.style.gap = "8px";
+
+      var headerBar = document.createElement("div");
+      headerBar.style.display = "flex";
+      headerBar.style.alignItems = "center";
+      headerBar.style.justifyContent = "space-between";
+      headerBar.style.padding = "2px 2px";
+      headerBar.innerHTML = `
+        <span style="font-size:11.5px;font-weight:800;color:#0F172A;display:flex;align-items:center;gap:4px;">
+          🚀 <b>Jobab Chat Subscription Plans</b>
+        </span>
+        <span style="font-size:10px;color:#059669;background:#ECFDF5;border:1px solid #A7F3D0;padding:2px 6px;border-radius:10px;font-weight:700;">
+          Up to 25% OFF
+        </span>
+      `;
+      container.appendChild(headerBar);
+
+      var deck = document.createElement("div");
+      deck.className = "aiaas-plans-deck";
+      deck.style.display = "flex";
+      deck.style.gap = "10px";
+      deck.style.overflowX = "auto";
+      deck.style.padding = "6px 2px 10px 2px";
+      deck.style.webkitOverflowScrolling = "touch";
+
+      plans.forEach(function (plan) {
+        var isPopular = plan.is_popular;
+        var card = document.createElement("div");
+        card.className = "aiaas-plan-card" + (isPopular ? " popular" : "");
+        card.style.flex = "0 0 230px";
+        card.style.background = "#ffffff";
+        card.style.border = isPopular ? "2px solid #4F46E5" : "1px solid #E2E8F0";
+        card.style.borderRadius = "16px";
+        card.style.padding = "14px";
+        card.style.boxShadow = isPopular ? "0 8px 20px -4px rgba(79, 70, 229, 0.2)" : "0 2px 8px rgba(0,0,0,0.05)";
+        card.style.display = "flex";
+        card.style.flexDirection = "column";
+        card.style.justifyContent = "space-between";
+        card.style.position = "relative";
+
+        var badgeHtml = "";
+        if (isPopular) {
+          badgeHtml = `
+            <div style="position:absolute;top:-10px;right:14px;background:linear-gradient(135deg, #4F46E5, #6366F1);color:#ffffff;font-size:9.5px;font-weight:800;padding:2px 8px;border-radius:12px;box-shadow:0 2px 6px rgba(79,70,229,0.3);letter-spacing:0.3px;">
+              ⭐ MOST POPULAR
+            </div>
+          `;
+        } else if (plan.badge_text) {
+          badgeHtml = `
+            <div style="position:absolute;top:-10px;right:14px;background:#F1F5F9;color:#475569;font-size:9.5px;font-weight:800;padding:2px 8px;border-radius:12px;border:1px solid #CBD5E1;">
+              ${plan.badge_text}
+            </div>
+          `;
+        }
+
+        var priceStr = plan.monthly_price_bdt === 0
+          ? "Free"
+          : "৳" + plan.monthly_price_bdt.toLocaleString();
+        var periodStr = plan.monthly_price_bdt === 0 ? "forever" : "/ mo";
+
+        var featuresHtml = "";
+        if (plan.features && Array.isArray(plan.features)) {
+          featuresHtml = plan.features.slice(0, 4).map(function (feat) {
+            return `
+              <div style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:#334155;margin-bottom:4px;">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:#ECFDF5;color:#059669;font-size:8.5px;font-weight:900;flex-shrink:0;">✓</span>
+                <span style="line-height:1.25;">${feat}</span>
+              </div>
+            `;
+          }).join("");
+        }
+
+        var btnBg = isPopular ? "#4F46E5" : "#0F172A";
+
+        card.innerHTML = `
+          ${badgeHtml}
+          <div>
+            <div style="font-size:13px;font-weight:800;color:#0F172A;margin-bottom:2px;">${plan.name}</div>
+            <div style="font-size:10px;color:#64748B;line-height:1.3;margin-bottom:8px;min-height:26px;">${plan.description || ''}</div>
+            
+            <div style="display:flex;align-items:baseline;gap:4px;margin-bottom:8px;">
+              <span style="font-size:19px;font-weight:900;font-family:monospace;color:#0F172A;">${priceStr}</span>
+              <span style="font-size:10.5px;font-weight:600;color:#64748B;">${periodStr}</span>
+            </div>
+
+            <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:7px;margin-bottom:8px;">
+              <div style="font-size:9.5px;font-weight:700;color:#475569;margin-bottom:3px;">INCLUDED LIMITS:</div>
+              <div style="font-size:10.5px;font-weight:700;color:#4F46E5;">⚡ ${(plan.monthly_token_limit || 0).toLocaleString()} AI Tokens</div>
+              <div style="font-size:10px;color:#64748B;margin-top:2px;">🌐 ${plan.max_websites || 1} Widget(s) • 👥 ${plan.max_agents || 1} Agent(s)</div>
+            </div>
+
+            <div style="margin-bottom:10px;">
+              ${featuresHtml}
+            </div>
+          </div>
+
+          <button class="aiaas-plan-btn-start" style="width:100%;padding:8px 10px;border-radius:10px;border:none;background:${btnBg};color:#ffffff;font-size:11px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;box-shadow:0 2px 6px rgba(0,0,0,0.1);transition:opacity 0.15s ease;">
+            🚀 Choose ${plan.name.split(' ')[0]}
+          </button>
+        `;
+
+        var btn = card.querySelector(".aiaas-plan-btn-start");
+        if (btn) {
+          btn.addEventListener("click", function () {
+            window.open(window.location.origin + "/subscription", "_blank");
+          });
+        }
+
+        deck.appendChild(card);
+      });
+
+      container.appendChild(deck);
+      return container;
+    }
+
     // Micro-Component Registry for 100+ Future Generative UI Modules
     var UI_COMPONENTS = {
       "product_card": function (data) {
@@ -1999,6 +2121,9 @@
       },
       "order_tracking_card": function (data) {
         return renderOrderTrackingCard(data.order);
+      },
+      "pricing_plans_card": function (data) {
+        return renderPricingPlansCard(data.plans);
       }
     };
 
