@@ -1473,6 +1473,7 @@ async def update_superadmin_theme(
 
 class PricingEnginePayload(BaseModel):
     default_per_10k_tokens_rate_bdt: float = 1.50
+    tokens_per_message: float = 333.56
     pay_as_you_go_enabled: bool = True
     custom_slider_builder_enabled: bool = True
     min_wallet_topup_bdt: float = 100.0
@@ -1516,6 +1517,7 @@ async def update_superadmin_pricing_engine(
         metadata_json={
             "admin_email": admin.email,
             "default_per_10k_rate": payload.default_per_10k_tokens_rate_bdt,
+            "tokens_per_message": payload.tokens_per_message,
             "pay_as_you_go_enabled": payload.pay_as_you_go_enabled,
             "annual_discount_percentage": payload.annual_discount_percentage,
             "bkash_enabled": payload.bkash_enabled,

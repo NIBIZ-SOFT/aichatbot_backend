@@ -276,6 +276,7 @@ class PricingService:
         
         default_config = {
             "default_per_10k_tokens_rate_bdt": 1.50,
+            "tokens_per_message": 333.56,
             "pay_as_you_go_enabled": True,
             "custom_slider_builder_enabled": True,
             "min_wallet_topup_bdt": 100.0,
