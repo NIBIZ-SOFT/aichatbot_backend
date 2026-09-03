@@ -196,9 +196,9 @@ async def seed_database(wipe_all_client_data: bool = True):
                     "Community Support"
                 ],
                 "badge_text": "Free Forever",
-                "is_featured": False,
+                "is_popular": False,
                 "is_active": True,
-                "sort_order": 1
+                "display_order": 1
             },
             {
                 "name": "Starter Plan",
@@ -221,9 +221,9 @@ async def seed_database(wipe_all_client_data: bool = True):
                     "Email Support (24h SLA)"
                 ],
                 "badge_text": "Starter",
-                "is_featured": False,
+                "is_popular": False,
                 "is_active": True,
-                "sort_order": 2
+                "display_order": 2
             },
             {
                 "name": "Growth Plan",
@@ -247,9 +247,9 @@ async def seed_database(wipe_all_client_data: bool = True):
                     "Priority WhatsApp & Ticket Support"
                 ],
                 "badge_text": "Most Popular",
-                "is_featured": True,
+                "is_popular": True,
                 "is_active": True,
-                "sort_order": 3
+                "display_order": 3
             },
             {
                 "name": "Enterprise Plan",
@@ -273,9 +273,9 @@ async def seed_database(wipe_all_client_data: bool = True):
                     "24/7 Phone & Slack Direct Support"
                 ],
                 "badge_text": "Enterprise",
-                "is_featured": False,
+                "is_popular": False,
                 "is_active": True,
-                "sort_order": 4
+                "display_order": 4
             }
         ]
 
@@ -298,9 +298,9 @@ async def seed_database(wipe_all_client_data: bool = True):
                     max_knowledge_docs=p_data["max_knowledge_docs"],
                     features=p_data["features"],
                     badge_text=p_data["badge_text"],
-                    is_featured=p_data["is_featured"],
+                    is_popular=p_data["is_popular"],
                     is_active=p_data["is_active"],
-                    sort_order=p_data["sort_order"],
+                    display_order=p_data["display_order"],
                     created_at=utc_now(),
                     updated_at=utc_now()
                 )
@@ -317,8 +317,8 @@ async def seed_database(wipe_all_client_data: bool = True):
                 existing_plan.max_knowledge_docs = p_data["max_knowledge_docs"]
                 existing_plan.features = p_data["features"]
                 existing_plan.badge_text = p_data["badge_text"]
-                existing_plan.is_featured = p_data["is_featured"]
-                existing_plan.sort_order = p_data["sort_order"]
+                existing_plan.is_popular = p_data["is_popular"]
+                existing_plan.display_order = p_data["display_order"]
 
         await db.commit()
 
@@ -381,13 +381,25 @@ async def seed_database(wipe_all_client_data: bool = True):
                     id=uuid.uuid4(),
                     name="Jobab Chat Platform Support",
                     slug="platform-support",
-                    subscription_tier=SubscriptionTier.ENTERPRISE,
                     is_active=True,
-                    monthly_token_limit=100000000,
-                    used_tokens=0,
                     business_category="saas"
                 )
                 db.add(support_tenant)
+                await db.flush()
+
+                support_sub = Subscription(
+                    id=uuid.uuid4(),
+                    tenant_id=support_tenant.id,
+                    tier=SubscriptionTier.ENTERPRISE,
+                    plan_code="enterprise",
+                    status=SubscriptionStatus.ACTIVE,
+                    monthly_token_limit=100000000,
+                    monthly_conversation_limit=50000,
+                    max_agents=100,
+                    max_websites=100,
+                    max_knowledge_docs=500
+                )
+                db.add(support_sub)
                 await db.flush()
 
             asst_stmt = select(AIAssistant).where(AIAssistant.tenant_id == support_tenant.id)
@@ -397,7 +409,7 @@ async def seed_database(wipe_all_client_data: bool = True):
                     id=uuid.uuid4(),
                     tenant_id=support_tenant.id,
                     name="Jobab Live Concierge",
-                    system_prompt="You are the official Jobab Chat live sales & customer support specialist. Help visitors with information about pricing plans, bKash/Nagad integration, AI features, and lead booking in both English and Bengali.",
+                    system_instruction="You are the official Jobab Chat live sales & customer support specialist. Help visitors with information about pricing plans, bKash/Nagad integration, AI features, and lead booking in both English and Bengali.",
                     model_name="google/gemini-2.5-flash",
                     temperature=0.3
                 )
