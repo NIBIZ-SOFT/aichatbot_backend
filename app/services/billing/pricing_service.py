@@ -280,6 +280,9 @@ class PricingService:
             "custom_slider_builder_enabled": True,
             "min_wallet_topup_bdt": 100.0,
             "annual_discount_percentage": 15.0,
+            "bkash_enabled": True,
+            "eps_enabled": True,
+            "direct_trial_enabled": False,
             "base_custom_platform_fee_bdt": 1990.0,
             "per_extra_agent_bdt": 750.0,
             "per_extra_website_bdt": 1200.0

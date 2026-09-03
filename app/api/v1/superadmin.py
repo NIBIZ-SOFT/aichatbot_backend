@@ -722,7 +722,8 @@ async def get_bkash_gateway_settings(
         username=cfg.get("username", ""),
         password=cfg.get("password", ""),
         merchant_number=cfg.get("merchant_number", "01837586105"),
-        status="Live Connected" if not cfg.get("is_sandbox", True) else "Sandbox Test Mode"
+        status="Live Connected" if not cfg.get("is_sandbox", True) else "Sandbox Test Mode",
+        is_enabled=cfg.get("is_enabled", True)
     )
 
 @router.post("/bkash/settings")
@@ -743,6 +744,10 @@ async def update_bkash_gateway_settings(
         db.add(setting)
     else:
         setting.value_json = dump
+
+    # Sync with pricing engine config
+    if "is_enabled" in dump:
+        await PricingService.update_pricing_engine_config(db, {"bkash_enabled": bool(dump["is_enabled"])})
 
     # Record Audit Log
     audit = AuditLog(
@@ -821,7 +826,8 @@ async def get_eps_gateway_settings(
         merchant_id=cfg.get("merchant_id", ""),
         store_id=cfg.get("store_id", ""),
         merchant_number=cfg.get("merchant_number", "01700000000"),
-        status="Live Connected" if not cfg.get("is_sandbox", True) else "Sandbox Test Mode"
+        status="Live Connected" if not cfg.get("is_sandbox", True) else "Sandbox Test Mode",
+        is_enabled=cfg.get("is_enabled", True)
     )
 
 @router.post("/eps/settings")
@@ -842,6 +848,10 @@ async def update_eps_gateway_settings(
         db.add(setting)
     else:
         setting.value_json = dump
+
+    # Sync with pricing engine config
+    if "is_enabled" in dump:
+        await PricingService.update_pricing_engine_config(db, {"eps_enabled": bool(dump["is_enabled"])})
 
     # Record Audit Log
     audit = AuditLog(
@@ -1467,6 +1477,9 @@ class PricingEnginePayload(BaseModel):
     custom_slider_builder_enabled: bool = True
     min_wallet_topup_bdt: float = 100.0
     annual_discount_percentage: float = 15.0
+    bkash_enabled: bool = True
+    eps_enabled: bool = True
+    direct_trial_enabled: bool = False
     base_custom_platform_fee_bdt: float = 1990.0
     per_extra_agent_bdt: float = 750.0
     per_extra_website_bdt: float = 1200.0
@@ -1489,7 +1502,7 @@ async def update_superadmin_pricing_engine(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Updates global AI token unit rate, minimum top-up, annual discount, and Pay-As-You-Go visibility toggle.
+    Updates global AI token unit rate, minimum top-up, annual discount, payment gateways (bKash/EPS) and Pay-As-You-Go visibility toggle.
     """
     data = payload.model_dump()
     updated = await PricingService.update_pricing_engine_config(db, data)
@@ -1504,7 +1517,10 @@ async def update_superadmin_pricing_engine(
             "admin_email": admin.email,
             "default_per_10k_rate": payload.default_per_10k_tokens_rate_bdt,
             "pay_as_you_go_enabled": payload.pay_as_you_go_enabled,
-            "annual_discount_percentage": payload.annual_discount_percentage
+            "annual_discount_percentage": payload.annual_discount_percentage,
+            "bkash_enabled": payload.bkash_enabled,
+            "eps_enabled": payload.eps_enabled,
+            "direct_trial_enabled": payload.direct_trial_enabled
         }
     )
     db.add(audit)

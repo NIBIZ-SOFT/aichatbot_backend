@@ -112,6 +112,11 @@ async def create_bkash_checkout_session(
     Creates a new bKash tokenized payment session for the requested subscription tier.
     Dynamically loads pricing from database and applies promo/coupon code discounts.
     """
+    # Check if bKash gateway is enabled by admin
+    engine_cfg = await PricingService.get_pricing_engine_config(db)
+    if not engine_cfg.get("bkash_enabled", True):
+        raise HTTPException(status_code=403, detail="bKash Payment Gateway is currently disabled by administrator.")
+
     tier_str = payload.tier.lower()
     
     # Load dynamic plan from database
@@ -409,6 +414,11 @@ async def init_wallet_topup(
     """
     Initializes a bKash direct payment session for prepaid AI wallet recharge.
     """
+    # Check if bKash gateway is enabled by admin
+    engine_cfg = await PricingService.get_pricing_engine_config(db)
+    if not engine_cfg.get("bkash_enabled", True):
+        raise HTTPException(status_code=403, detail="bKash Payment Gateway is currently disabled by administrator.")
+
     if payload.amount_bdt < 100.0:
         raise HTTPException(status_code=400, detail="Minimum top-up amount is ৳100.00.")
         
@@ -509,6 +519,11 @@ async def create_eps_checkout_session(
     Dynamically resolves plan pricing, coupon discounts, generates HMAC-SHA512 signature,
     and returns EPS RedirectURL.
     """
+    # Check if EPS gateway is enabled by admin
+    engine_cfg = await PricingService.get_pricing_engine_config(db)
+    if not engine_cfg.get("eps_enabled", True):
+        raise HTTPException(status_code=403, detail="EPS Payment Gateway is currently disabled by administrator.")
+
     tier_str = payload.tier.lower()
 
     # Load dynamic plan from database
@@ -772,6 +787,11 @@ async def init_eps_wallet_topup(
     """
     Initializes an EPS payment session for prepaid AI wallet recharge.
     """
+    # Check if EPS gateway is enabled by admin
+    engine_cfg = await PricingService.get_pricing_engine_config(db)
+    if not engine_cfg.get("eps_enabled", True):
+        raise HTTPException(status_code=403, detail="EPS Payment Gateway is currently disabled by administrator.")
+
     if payload.amount_bdt < 100.0:
         raise HTTPException(status_code=400, detail="Minimum top-up amount is ৳100.00.")
 

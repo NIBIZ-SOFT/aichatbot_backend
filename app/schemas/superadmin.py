@@ -106,6 +106,7 @@ class BkashSettingsPayload(BaseModel):
     username: str
     password: str
     merchant_number: Optional[str] = "01837586105"
+    is_enabled: Optional[bool] = True
 
 class BkashSettingsOut(BaseModel):
     is_sandbox: bool
@@ -116,6 +117,7 @@ class BkashSettingsOut(BaseModel):
     password: str
     merchant_number: str
     status: str
+    is_enabled: Optional[bool] = True
 
 class BkashTestConnectionResponse(BaseModel):
     status: str
@@ -132,6 +134,7 @@ class EpsSettingsPayload(BaseModel):
     merchant_id: str
     store_id: str
     merchant_number: Optional[str] = "01700000000"
+    is_enabled: Optional[bool] = True
 
 class EpsSettingsOut(BaseModel):
     is_sandbox: bool
@@ -143,6 +146,7 @@ class EpsSettingsOut(BaseModel):
     store_id: str
     merchant_number: str
     status: str
+    is_enabled: Optional[bool] = True
 
 class EpsTestConnectionResponse(BaseModel):
     status: str
