@@ -159,6 +159,18 @@ async def toggle_assistant_active(
     await db.refresh(assistant)
     return {"status": "success", "assistant_id": assistant.id, "is_active": assistant.is_active}
 
+async def _resolve_tenant_id_for_user(user: User, db: AsyncSession) -> uuid.UUID:
+    if user.tenant_id:
+        return user.tenant_id
+    if user.role == UserRole.SUPER_ADMIN:
+        stmt = select(Tenant).where(Tenant.slug == "platform-support")
+        t = (await db.execute(stmt)).scalars().first()
+        if t:
+            user.tenant_id = t.id
+            await db.commit()
+            return t.id
+    raise HTTPException(status_code=400, detail="User is not associated with an active business tenant.")
+
 # ----------------- KNOWLEDGE & RAG INGESTION -----------------
 @router.post("/knowledge", response_model=KnowledgeBaseOut)
 @router.post("/knowledge/ingest-text", response_model=KnowledgeBaseOut)
@@ -167,9 +179,10 @@ async def ingest_knowledge_text(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    tenant_id = await _resolve_tenant_id_for_user(user, db)
     rag = RAGService(db=db)
     kb = await rag.ingest_document(
-        tenant_id=user.tenant_id,
+        tenant_id=tenant_id,
         title=payload.title,
         content=payload.content,
         category=payload.category,
@@ -184,10 +197,11 @@ async def ingest_knowledge_faq(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    tenant_id = await _resolve_tenant_id_for_user(user, db)
     rag = RAGService(db=db)
     items = [{"question": item.question, "answer": item.answer} for item in payload.faq_items]
     kb = await rag.ingest_faq_items(
-        tenant_id=user.tenant_id,
+        tenant_id=tenant_id,
         title=payload.title,
         category=payload.category,
         faq_items=items
@@ -200,9 +214,10 @@ async def search_knowledge_sandbox(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    tenant_id = await _resolve_tenant_id_for_user(user, db)
     rag = RAGService(db=db)
     results = await rag.search_relevant_chunks(
-        tenant_id=user.tenant_id,
+        tenant_id=tenant_id,
         query=payload.query,
         limit=payload.limit or 4,
         similarity_threshold=0.30
@@ -328,8 +343,9 @@ async def delete_knowledge_document(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    tenant_id = await _resolve_tenant_id_for_user(user, db)
     rag = RAGService(db=db)
-    success = await rag.delete_knowledge_base(tenant_id=user.tenant_id, kb_id=knowledge_id)
+    success = await rag.delete_knowledge_base(tenant_id=tenant_id, kb_id=knowledge_id)
     if not success:
         raise HTTPException(status_code=404, detail="Knowledge base document not found")
     return {"status": "success", "message": "Knowledge document and all vector chunks deleted from PostgreSQL"}
@@ -340,9 +356,10 @@ async def list_knowledge_docs(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    tenant_id = await _resolve_tenant_id_for_user(user, db)
     result = await db.execute(
         select(KnowledgeBase)
-        .where(KnowledgeBase.tenant_id == user.tenant_id)
+        .where(KnowledgeBase.tenant_id == tenant_id)
         .order_by(KnowledgeBase.created_at.desc())
     )
     return result.scalars().all()

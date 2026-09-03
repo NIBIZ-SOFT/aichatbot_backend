@@ -15,6 +15,9 @@ from app.models.all_models import (
     Conversation, ConversationStatus, ConversationPriority, Message, SenderType,
     Product, Order, PlatformSetting, PricingPlan, Coupon
 )
+from app.services.ai.gemini import gemini_service
+from app.services.rag.rag_service import RAGService
+from app.api.v1.conversations import OFFICIAL_JOBAB_CONCIERGE_PROMPT
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -409,12 +412,15 @@ async def seed_database(wipe_all_client_data: bool = True):
                     id=uuid.uuid4(),
                     tenant_id=support_tenant.id,
                     name="Jobab Live Concierge",
-                    system_instruction="You are the official Jobab Chat live sales & customer support specialist. Help visitors with information about pricing plans, bKash/Nagad integration, AI features, and lead booking in both English and Bengali.",
+                    system_instruction=OFFICIAL_JOBAB_CONCIERGE_PROMPT,
                     model_name="google/gemini-2.5-flash",
                     temperature=0.3
                 )
                 db.add(assistant)
                 await db.flush()
+            else:
+                assistant.system_instruction = OFFICIAL_JOBAB_CONCIERGE_PROMPT
+                assistant.name = "Jobab Live Concierge"
 
             new_website = Website(
                 id=uuid.uuid4(),
@@ -438,17 +444,266 @@ async def seed_database(wipe_all_client_data: bool = True):
             if not existing_support.is_active:
                 existing_support.is_active = True
                 await db.commit()
+            if existing_support.assistant_id:
+                asst_res = await db.execute(select(AIAssistant).where(AIAssistant.id == existing_support.assistant_id))
+                asst = asst_res.scalars().first()
+                if asst:
+                    asst.system_instruction = OFFICIAL_JOBAB_CONCIERGE_PROMPT
+                    asst.name = "Jobab Live Concierge"
+                    await db.commit()
             print("[SEED] Official Platform Live Support Chatbot already active.")
 
         # Ensure Super Admin is linked to Platform Live Support Tenant
         admin_res = await db.execute(select(User).where(User.email == "admin@gmail.com"))
         admin_user = admin_res.scalars().first()
+        support_target_tenant = existing_support.tenant_id if existing_support else new_website.tenant_id
         if admin_user:
-            support_target_tenant = existing_support.tenant_id if existing_support else new_website.tenant_id
             if admin_user.tenant_id != support_target_tenant:
                 admin_user.tenant_id = support_target_tenant
                 await db.commit()
                 print(f"[SEED] Master Super Admin linked to Platform Live Support Tenant ({support_target_tenant})!")
+
+        # 8. Seed Official Default Knowledge Base for Platform Owner (Jobab Chat)
+        print("[SEED] Seeding Official Jobab Chat Knowledge Base Documents...")
+        rag_svc = RAGService(db=db, gemini_service=gemini_service)
+
+        official_knowledge_docs = [
+            {
+                "title": "Jobab Chat Platform Architecture & Autonomous AI Overview",
+                "category": "Platform Overview",
+                "source_type": "markdown_doc",
+                "content": """# Jobab Chat (জবাব চ্যাট) Enterprise Platform Overview
+
+## About Jobab Chat
+Jobab Chat is Bangladesh's premier Autonomous Conversational AI & Customer Communication Platform. Built specifically for e-commerce brands, digital retailers, healthcare clinics, corporate enterprises, and customer support organizations, Jobab Chat automates up to 85% of incoming customer conversations across web and mobile touchpoints.
+
+## Core Architecture & Capabilities
+1. Universal Embeddable CDN Widget:
+A single high-performance JavaScript script tag that loads in under 100ms with zero dependency on external heavy frameworks. Encapsulated in Shadow DOM to prevent any CSS/JS conflicts with host websites.
+- Script CDN: https://aichat-backend.npms.pro/static/widget.js
+- Embed Code:
+<script src="https://aichat-backend.npms.pro/static/widget.js"></script>
+<script>
+  EnterpriseChatWidget.init({
+    widgetKey: "YOUR_WIDGET_KEY",
+    apiUrl: "https://aichat-backend.npms.pro/api/v1"
+  });
+</script>
+- Compatible with WordPress, Shopify, Next.js, React, Vue, Laravel, Magento, and plain HTML.
+
+2. Advanced Multi-LLM Universal AI Engine:
+Powered by Google Gemini 2.5 Flash and OpenAI GPT-4o through an enterprise-grade OpenAI-compatible gateway with guaranteed 99.9% uptime and sub-second latency.
+- Bilingual mastery: Flawless comprehension of Bengali (বাংলা), English, and Romanized Bengali (Banglish).
+- Tone control: Professional, friendly, empathetic, and persuasive sales negotiation personas.
+
+3. Autonomous In-Chat Conversational Commerce:
+Visitors can browse interactive product carousels, view item specifications, select size/color variants, and complete 1-Click checkouts without ever leaving the chat interface.
+
+4. Built-in Payment Gateways:
+- bKash Tokenized Auto-Debit: Instant 1-click subscription payments with automatic recurring renewals.
+- EPS (Electronic Payment Settlement): NBR-compliant gateway supporting Visa, Mastercard, NexusPay, and 20+ Bangladeshi commercial banks.
+
+5. AI RAG Vector Knowledge Base:
+Enterprises can index raw text, PDF manuals, product catalogs, and FAQ pairs. Real-time pgvector semantic cosine similarity search guarantees verified, hallucination-free responses.
+
+6. Seamless Human Agent Live Handover:
+Visitors can request a human agent at any time with a single click. Human agents receive real-time audio chimes and desktop notifications in the multi-agent Inbox workspace."""
+            },
+            {
+                "title": "Jobab Chat Subscription Plans, Token Quotas & bKash Billing",
+                "category": "Products & Pricing",
+                "source_type": "markdown_doc",
+                "content": """# Jobab Chat Official Subscription Pricing Plans & Billing Guide
+
+## Overview of SaaS Subscription Tiers
+Jobab Chat provides flexible, transparent pricing tailored for startups, scaling digital retailers, and large corporate enterprises in Bangladesh. All paid plans include bKash auto-debit, EPS internet banking, and official NBR tax receipts.
+
+### 1. Free Sandbox Plan (৳0 / forever)
+- Monthly Price: ৳0.00 BDT
+- Token Limit: 50,000 AI Tokens / month
+- Active Website Widgets: 1 Widget
+- Staff / Agent Seats: 1 Seat
+- Knowledge Base Documents: 2 Documents
+- AI Response Speed: Standard Speed
+- Support: Community Support & Online Help Center
+
+### 2. Starter Plan (৳4,990 / month | ৳4,240 / month billed annually - 15% OFF)
+- Monthly Price: ৳4,990 BDT
+- Annual Price: ৳50,880 BDT / year (Equivalent to ৳4,240 / month)
+- Token Limit: 500,000 AI Tokens / month (~1,500 full customer conversations)
+- Active Website Widgets: 2 Widgets
+- Staff / Agent Seats: 2 Seats
+- Knowledge Base Documents: 10 Documents
+- Monthly Conversation Limit: 200 Conversations
+- Automated Payment: bKash Tokenized Auto-Debit & EPS Multi-Card Billing
+- Analytics: Basic CSAT & Resolution Analytics
+- Support: Email Support (24h SLA)
+
+### 3. Growth Plan — MOST POPULAR (৳19,990 / month | ৳16,990 / month billed annually - 15% OFF)
+- Monthly Price: ৳19,990 BDT
+- Annual Price: ৳203,880 BDT / year (Equivalent to ৳16,990 / month)
+- Token Limit: 2,500,000 AI Tokens / month (~7,500 full customer conversations)
+- Active Website Widgets: 5 Widgets
+- Staff / Agent Seats: 5 Seats
+- Knowledge Base Documents: 50 Documents
+- Monthly Conversation Limit: 1,000 Conversations
+- E-Commerce Module: In-Chat Product Cards, Shopping Cart & Cash on Delivery (COD) Checkout Desk
+- Custom White-Labeling: Custom branding, logo, colors, and welcome messages
+- Analytics: Advanced CSAT & Real-Time Funnel Analytics
+- Support: Priority WhatsApp & Ticket Support
+
+### 4. Enterprise Plan (৳49,990 / month | ৳42,490 / month billed annually - 15% OFF)
+- Monthly Price: ৳49,990 BDT
+- Annual Price: ৳509,880 BDT / year (Equivalent to ৳42,490 / month)
+- Token Limit: 10,000,000 AI Tokens / month (~30,000 full customer conversations)
+- Active Website Widgets: 20 Widgets
+- Staff / Agent Seats: 20 Seats
+- Knowledge Base Documents: 200 Documents
+- Monthly Conversation Limit: 5,000 Conversations
+- Custom AI LLM Fine-Tuning: Custom system prompts, domain guardrails, and RAG architecture
+- Dedicated Account Manager & Solutions Architect
+- SLA Guarantee: Enterprise 99.9% Uptime Guarantee
+- Support: 24/7 Direct Phone & Dedicated Slack/WhatsApp Channel
+
+## Promotional Coupons & Discounts
+- WELCOME50: 50% discount on the first month subscription for any tier.
+- LAUNCH2026: 20% flat discount on annual billing subscriptions."""
+            },
+            {
+                "title": "Autonomous E-Commerce In-Chat Checkout, COD & Delivery Engine",
+                "category": "E-Commerce & Logistics",
+                "source_type": "markdown_doc",
+                "content": """# Autonomous In-Chat E-Commerce, Cash on Delivery (COD) & Courier Delivery
+
+## In-Chat Conversational Commerce Overview
+Jobab Chat transforms standard live chat into a high-converting automated sales funnel. Visitors can ask questions about products, view live inventory, pick sizes/colors, add items to a slide-out cart drawer, and complete checkout within the chat window.
+
+## Key E-Commerce Features
+1. Interactive Product Cards & Carousels:
+When a customer asks for a product or category (e.g. 'স্মার্টওয়াচ দেখাও' or 'Show me earbuds'), the AI responds with rich interactive cards featuring high-resolution images, real-time prices, strikethrough original prices, discount badges, and size selector chips.
+
+2. Cart Drawer & Instant 1-Click Checkout:
+Customers can click '🛒 Add to Cart' or '⚡ Buy Now'. The widget instantly opens the integrated checkout modal requesting Name, Phone Number, Delivery Address, City, and Payment Method.
+
+3. Automated Courier Delivery Fees in Bangladesh:
+- Inside Dhaka: ৳60 BDT
+- Outside Dhaka: ৳120 BDT
+The delivery charge is automatically computed and added to the order subtotal based on the selected destination city.
+
+4. Payment Options for Orders:
+- Cash on Delivery (COD): Customer pays cash to the courier upon product delivery.
+- bKash Instant Payment: Direct mobile banking integration.
+- EPS PGW: Credit/Debit cards & internet banking.
+
+5. Live Order Tracking:
+Customers can track their orders directly by typing their order number (e.g., ORD-20260901-XXXX) or their mobile phone number. The chatbot displays real-time courier dispatch status (Placed, Confirmed, Shipped, Delivered)."""
+            },
+            {
+                "title": "Embeddable CDN Widget Integration & Developer REST API Guide",
+                "category": "Integration & Developer API",
+                "source_type": "markdown_doc",
+                "content": """# Embeddable CDN Widget Integration & Developer REST API
+
+## Widget Quick Start
+Adding the Jobab Chat widget to any website requires just two script lines before the closing </body> tag:
+
+<script src="https://aichat-backend.npms.pro/static/widget.js"></script>
+<script>
+  EnterpriseChatWidget.init({
+    widgetKey: "YOUR_WIDGET_KEY",
+    apiUrl: "https://aichat-backend.npms.pro/api/v1",
+    primaryColor: "#4F46E5",
+    position: "bottom-right"
+  });
+</script>
+
+## Platform CMS Integrations
+1. WordPress / WooCommerce:
+Paste the snippet into footer.php or use the 'Insert Headers and Footers' plugin.
+2. Shopify:
+Navigate to Online Store -> Themes -> Edit code -> theme.liquid and paste before </body>.
+3. Next.js / React:
+Add the snippet using next/script or a useEffect hook in your root layout.
+
+## Developer REST API
+All backend APIs follow standard REST JSON conventions under https://aichat-backend.npms.pro/api/v1:
+- POST /auth/login: Authenticate and obtain JWT Bearer token.
+- GET /websites: List all active website widgets and CDN keys.
+- POST /websites: Create a new widget with custom branding.
+- GET /knowledge: List indexed RAG documentation.
+- POST /knowledge/ingest-text: Ingest markdown or plain text with automatic vector embeddings.
+- GET /conversations: Fetch live multi-channel chat threads.
+- POST /public/widget/orders: Autonomous order booking from third-party client stores."""
+            },
+            {
+                "title": "AI RAG Vector Knowledge Base & Human Agent Live Handover",
+                "category": "AI & Live Support",
+                "source_type": "markdown_doc",
+                "content": """# AI RAG Vector Knowledge Base & Real-Time Human Agent Handover
+
+## Dynamic Vector RAG Architecture
+1. Chunking & Indexing:
+When documents or FAQ items are uploaded to Jobab Chat, they are parsed and broken into semantic chunks preserving headers, code snippets, and list context.
+2. 768-Dimensional Embeddings:
+Each chunk is passed to the embedding engine (text-embedding-004) to generate dense semantic vector representations stored in PostgreSQL.
+3. Semantic Cosine Similarity Search:
+Incoming user questions are vectorized in real-time. The top relevant chunks are injected into the LLM system prompt as verified facts. The AI is strictly instructed to rely only on verified context, guaranteeing zero hallucinations.
+
+## Real-Time Human Agent Handover
+1. Visitor Trigger:
+Visitors can click '👤 Talk to Human' at the top of the chat widget at any time.
+2. Sentiment & Frustration Detection:
+If a visitor expresses anger or dissatisfaction, the AI Safety Rules Engine automatically switches the conversation mode to waiting_for_agent.
+3. Agent Workspace Alerts:
+Human agents stationed in the Inbox view receive real-time audio chimes (pleasant sound alert) and visual badges. Agents can reply directly, and optionally click 'Switch to AI' when the query is resolved."""
+            },
+            {
+                "title": "Jobab Chat Helpdesk, Enterprise SLAs & Super Admin Contacts",
+                "category": "Support & Contact",
+                "source_type": "markdown_doc",
+                "content": """# Jobab Chat Official Helpdesk, Enterprise SLAs & Super Admin Contacts
+
+## Official Platform Helpdesk & Support Channels
+- Platform Live Support Chat: Available 24/7 on the official landing page (https://npms.pro and https://jobab.chat).
+- Official Support Email: support@jobab.chat / admin@gmail.com
+- Customer Hotline & WhatsApp: +880 1700-000000
+- Headquarters: Dhaka, Bangladesh.
+- Operating Hours: 24 hours a day, 7 days a week, 365 days a year for automated AI; Human Agent desk operates from 9:00 AM to 11:00 PM BST daily.
+
+## Enterprise Service Level Agreements (SLAs)
+- Free Sandbox: Best-effort community support.
+- Starter Plan: 24-hour response SLA via email.
+- Growth Plan: 4-hour response SLA via priority WhatsApp and ticket desk.
+- Enterprise Plan: 15-minute response SLA for critical outages, dedicated Slack channel, and 99.9% uptime guarantee.
+
+## Platform Security & Compliance
+- Full TLS 1.3 encryption in transit.
+- PostgreSQL data isolation per tenant with cascade protection.
+- Encrypted BYOK (Bring Your Own Key) storage for custom Gemini and OpenAI API keys.
+- Fully compliant with Bangladesh National Board of Revenue (NBR) automated VAT billing standards."""
+            }
+        ]
+
+        for k_doc in official_knowledge_docs:
+            existing_kb_res = await db.execute(
+                select(KnowledgeBase).where(
+                    KnowledgeBase.tenant_id == support_target_tenant,
+                    KnowledgeBase.title == k_doc["title"]
+                )
+            )
+            existing_kb = existing_kb_res.scalars().first()
+            if not existing_kb:
+                try:
+                    await rag_svc.ingest_document(
+                        tenant_id=support_target_tenant,
+                        title=k_doc["title"],
+                        content=k_doc["content"],
+                        category=k_doc["category"],
+                        source_type=k_doc["source_type"]
+                    )
+                    print(f"  [KB INGESTED] {k_doc['title']} ({k_doc['category']})")
+                except Exception as e:
+                    print(f"  [KB ERROR] Could not ingest {k_doc['title']}: {e}")
 
         await db.commit()
 

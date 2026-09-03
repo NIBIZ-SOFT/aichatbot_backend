@@ -28,7 +28,8 @@ class GenerativeUIService:
 
     @staticmethod
     def _clean_text(text: str) -> str:
-        return re.sub(r'[^\w\s]', ' ', (text or '').lower()).strip()
+        # Preserve Unicode Bengali letters, digits, and combining marks (\u0980-\u09ff)
+        return re.sub(r'[^\w\s\u0980-\u09ff]', ' ', (text or '').lower()).strip()
 
     @classmethod
     def extract_quantity(cls, text: str) -> int:
@@ -272,6 +273,39 @@ class GenerativeUIService:
                 }
             }
 
+        elif tool_name in ["show_pricing_plans", "show_packages", "get_pricing_plans"]:
+            from app.models.all_models import PricingPlan
+            plans_res = await db.execute(
+                select(PricingPlan).where(PricingPlan.is_active == True).order_by(PricingPlan.display_order)
+            )
+            plans = list(plans_res.scalars().all())
+            if plans:
+                return {
+                    "type": "pricing_plans_card",
+                    "data": {
+                        "title": "Jobab Chat Official SaaS Subscription Plans",
+                        "plans": [
+                            {
+                                "id": str(p.id),
+                                "code": p.code,
+                                "name": p.name,
+                                "description": p.description,
+                                "monthly_price_bdt": p.monthly_price_bdt,
+                                "annual_price_bdt": p.annual_price_bdt,
+                                "monthly_token_limit": p.monthly_token_limit,
+                                "monthly_conversation_limit": p.monthly_conversation_limit,
+                                "max_agents": p.max_agents,
+                                "max_websites": p.max_websites,
+                                "max_knowledge_docs": p.max_knowledge_docs,
+                                "features": p.features,
+                                "badge_text": p.badge_text,
+                                "is_popular": p.is_popular
+                            }
+                            for p in plans
+                        ]
+                    }
+                }
+
         return None
 
     @classmethod
@@ -332,6 +366,24 @@ class GenerativeUIService:
                 tenant_id=tenant_id,
                 tool_name="show_product_catalog",
                 tool_args={"category": "all"},
+                conversation_id=conversation_id,
+                visitor_phone=visitor_phone
+            )
+            if comp:
+                return comp
+
+        # Pricing / Packages Fallback
+        PRICING_PHRASES = [
+            "package", "packages", "pricing", "plans", "plan", "subscription", "starter", "growth",
+            "enterprise", "দাম কত", "খরচ কত", "প্যাকেজ", "প্ল্যান", "ফিচার", "রেট", "মূল্য", "সাবস্ক্রিপশন"
+        ]
+        has_pricing = any(pp in clean_q for pp in PRICING_PHRASES)
+        if has_pricing:
+            comp = await cls.resolve_from_tool_call(
+                db=db,
+                tenant_id=tenant_id,
+                tool_name="show_pricing_plans",
+                tool_args={},
                 conversation_id=conversation_id,
                 visitor_phone=visitor_phone
             )

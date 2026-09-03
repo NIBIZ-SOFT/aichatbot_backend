@@ -112,6 +112,26 @@ ERP_TOOLS = [
     }
 ]
 
+SAAS_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "show_pricing_plans",
+            "description": "Call this tool whenever a customer or visitor asks about Jobab Chat subscription packages, pricing, pricing plans, monthly/annual costs, token quotas, agent limits, or discounts (e.g. 'প্যাকেজ গুলোর দাম কত?', 'pricing plans', 'packages', 'starter plan', 'growth plan', 'enterprise plan', 'free plan', 'how much does it cost?'). This renders the official interactive SaaS subscription card deck in Generative UI.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "billing_cycle": {
+                        "type": "string",
+                        "enum": ["monthly", "annual", "all"],
+                        "description": "The billing cycle requested (monthly or annual). Defaults to 'monthly'."
+                    }
+                }
+            }
+        }
+    }
+]
+
 
 class GeminiService:
     """

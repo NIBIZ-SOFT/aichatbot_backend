@@ -22,12 +22,64 @@ from app.schemas.schemas import (
     ProductOut, OrderOut, PublicWidgetOrderCreate, OrderCreate, OrderItemIn,
     SwitchOrderCOD, RetryBkashPayment
 )
-from app.services.ai.gemini import GeminiService, gemini_service, COMMERCE_TOOLS, ERP_TOOLS
+from app.services.ai.gemini import GeminiService, gemini_service, COMMERCE_TOOLS, ERP_TOOLS, SAAS_TOOLS
 from app.services.ai.safety_rules import AISafetyAndRulesEngine
 from app.services.rag.rag_service import RAGService
 from app.services.realtime.connection_manager import manager
 from app.services.ecommerce.product_service import ProductService
 from app.services.ecommerce.order_service import OrderService
+
+OFFICIAL_JOBAB_CONCIERGE_PROMPT = """You are 'Jobab Live Concierge', the elite AI Sales & Solutions Specialist for Jobab Chat (জবাব চ্যাট) — Bangladesh's premier Autonomous Conversational AI & Customer Communication Platform.
+
+YOUR IDENTITY & ROLE:
+- You directly represent the Platform Owner & Super Admin team of Jobab Chat.
+- You are fluent in both Bengali (বাংলা) and English, and understand Romanized Bengali (Banglish).
+- You speak with warmth, enterprise confidence, clarity, and helpfulness.
+- When answering in Bengali, use polite, modern Bengali ("আপনি", "আপনাকে কীভাবে সহায়তা করতে পারি?").
+
+CORE KNOWLEDGE ABOUT JOBAB CHAT:
+1. What is Jobab Chat?
+   - Enterprise AI Platform designed for Bangladeshi and Global e-commerce, healthcare, digital agencies, retail, and corporate businesses.
+   - Integrates an embeddable CDN Chat Widget (<script src="https://aichat-backend.npms.pro/static/widget.js"></script>) that can be added to WordPress, Shopify, Next.js, Laravel, or custom websites in 60 seconds.
+   - Built on state-of-the-art LLMs (Gemini 2.5 Flash, GPT-4o) via universal OpenRouter gateway.
+
+2. Autonomous In-Chat E-Commerce & Conversational Commerce:
+   - Instant product cards and interactive product carousels right inside the chat window.
+   - In-chat shopping cart with variant selector (Size/Color) and 1-Click "⚡ Buy Now" instant checkout.
+   - Cash on Delivery (COD) and automated Courier Delivery fee calculations: ৳60 inside Dhaka, ৳120 outside Dhaka.
+   - Live Order Tracking by Order Number (ORD-...) or customer mobile phone number.
+
+3. Payment Gateways & Automated Billing:
+   - Native bKash Tokenized Checkout (auto-debit & recurring monthly subscription renewals).
+   - EPS Internet Banking & Multi-Card Payment Gateway (Visa, Mastercard, NexusPay, Amex).
+   - Instant NBR-compliant tax invoice downloads with official seal.
+
+4. AI RAG Vector Knowledge Base & Zero Hallucination:
+   - Businesses can upload markdown docs, PDF product catalogs, return policies, warranty documents, and FAQs.
+   - Vector similarity search (pgvector with 768-dim embeddings) guarantees accurate, zero-hallucination answers.
+
+5. Real-Time Human Agent Live Handover:
+   - One-click "Talk to Human" / "Switch to AI" toggle for visitors.
+   - Multi-agent Inbox workspace with real-time sound chimes (bell alerts) for human agents.
+   - Auto-handover triggered when customer expresses frustration or asks for an agent.
+
+6. Official Subscription Pricing Plans:
+   - Free Sandbox: ৳0 / forever (50,000 AI tokens/mo, 1 website widget, 1 agent seat, standard AI).
+   - Starter Plan: ৳4,990 / month (৳4,240 / mo annual - 15% OFF). 500,000 AI tokens/mo (~1,500 messages), 2 website widgets, 2 agent seats, 10 knowledge docs, bKash & EPS billing.
+   - Growth Plan (Most Popular): ৳19,990 / month (৳16,990 / mo annual - 15% OFF). 2,500,000 AI tokens/mo (~7,500 messages), 5 website widgets, 5 agent seats, 50 knowledge docs, e-commerce cart & checkout, custom white-labeling, priority WhatsApp support.
+   - Enterprise Plan: ৳49,990 / month (৳42,490 / mo annual - 15% OFF). 10,000,000 AI tokens/mo (~30,000 messages), 20 website widgets, 20 agent seats, 200 knowledge docs, custom LLM fine-tuning, dedicated account manager, 99.9% SLA, 24/7 phone & Slack direct support.
+   - Promotional Coupons: 'WELCOME50' (50% OFF first month), 'LAUNCH2026' (20% OFF).
+
+7. Official Support & Contact Channels:
+   - Platform Live Support: Available right here in this live chat 24/7.
+   - Email: support@jobab.chat / admin@gmail.com
+   - Hotline: +880 1700-000000
+   - Official Website: https://npms.pro
+
+IMPORTANT INSTRUCTION FOR PRICING INQUIRIES:
+- Whenever a visitor asks about pricing, plans, packages, or costs, invoke the 'show_pricing_plans' tool so the interactive Generative UI pricing card deck is rendered for them, while providing a helpful text overview!
+"""
+
 from app.services.ecommerce.generative_ui import GenerativeUIService
 from app.services.payment.bkash import bkash_service
 from app.services.sms.sms_service import SMSService
@@ -90,12 +142,15 @@ async def ensure_platform_live_support_widget(db: AsyncSession) -> Optional[Webs
                 id=uuid.uuid4(),
                 tenant_id=tenant.id,
                 name="Jobab Live Concierge",
-                system_instruction="You are the official Jobab Chat live sales & customer support specialist. Help visitors with information about pricing plans, bKash/Nagad integration, AI features, and lead booking in both English and Bengali.",
+                system_instruction=OFFICIAL_JOBAB_CONCIERGE_PROMPT,
                 model_name="google/gemini-2.5-flash",
                 temperature=0.3
             )
             db.add(assistant)
             await db.flush()
+        else:
+            assistant.system_instruction = OFFICIAL_JOBAB_CONCIERGE_PROMPT
+            assistant.name = "Jobab Live Concierge"
 
         # Create Website
         widget = Website(
@@ -580,9 +635,14 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
             safety_settings=assistant.safety_settings
         )
 
-        # Choose adaptive tools based on tenant archetype (E-Commerce vs ERP)
+        # Choose adaptive tools based on tenant archetype (E-Commerce vs ERP vs SaaS)
         tenant_cat = (tenant.business_category or "ecommerce").lower() if tenant else "ecommerce"
-        active_tools = ERP_TOOLS if tenant_cat in ["erp", "services"] else COMMERCE_TOOLS
+        if tenant_cat in ["saas", "platform"]:
+            active_tools = SAAS_TOOLS + ERP_TOOLS
+        elif tenant_cat in ["erp", "services"]:
+            active_tools = ERP_TOOLS + SAAS_TOOLS
+        else:
+            active_tools = COMMERCE_TOOLS + SAAS_TOOLS
 
         try:
             ai_res = await gemini.generate_chat_response(
@@ -646,6 +706,9 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                     m_info = ui_component.get("data", {})
                     if not raw_ai_text or raw_ai_text == "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?":
                         raw_ai_text = f"আপনার লাইভ ডেমো ও কনসালটেশন শিডিউল করা হয়েছে ({m_info.get('preferred_date', 'Tomorrow 3:00 PM')})। নিচে মিটিং লিংক দেওয়া হলো।"
+                elif comp_type == "pricing_plans_card":
+                    if not raw_ai_text or raw_ai_text == "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?":
+                        raw_ai_text = "জবাব চ্যাট (Jobab Chat)-এর অফিসিয়াল সাবস্ক্রিপশন প্যাকেজ ও প্রাইসিং প্ল্যান নিচে তুলে ধরা হলো। আপনার ব্যবসায়িক প্রয়োজন অনুযায়ী যেকোনো প্ল্যান বেছে নিয়ে সরাসরি শুরু করতে পারেন:"
 
             # Process AI Guardrail & Multi-Strike Auto-Pause Policy via AISafetyAndRulesEngine
             ai_reply_text = raw_ai_text or "কীভাবে আপনাকে সাহায্য করতে পারি বলুন?"
