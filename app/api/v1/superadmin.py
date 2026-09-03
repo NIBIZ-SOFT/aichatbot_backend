@@ -1704,6 +1704,66 @@ async def update_superadmin_seo_metadata(
     }
 
 
+# ----------------- 15. PUBLIC CMS & LEGAL PAGES -----------------
+
+class PublicPagePayload(BaseModel):
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    meta_title: Optional[str] = None
+    meta_description: Optional[str] = None
+    last_updated: Optional[str] = None
+    badge: Optional[str] = None
+    content: Optional[str] = None
+
+@router.get("/public-pages")
+async def get_superadmin_public_pages(
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Returns all public pages (About, Privacy, Terms) for Super Admin CMS management.
+    """
+    from app.services.cms.public_pages_service import PublicPagesService
+    return await PublicPagesService.get_all_pages(db)
+
+@router.put("/public-pages/{slug}")
+async def update_superadmin_public_page(
+    slug: str,
+    payload: PublicPagePayload,
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Updates a public page (About, Privacy, Terms) with audit logging.
+    """
+    from app.services.cms.public_pages_service import PublicPagesService
+    dump = {k: v for k, v in payload.model_dump().items() if v is not None}
+    updated = await PublicPagesService.update_page(db, slug, dump)
+    
+    audit = AuditLog(
+        tenant_id=None,
+        user_id=admin.id,
+        action="superadmin.public_page_updated",
+        resource_type="cms_page",
+        resource_id=slug,
+        metadata_json={
+            "admin_email": admin.email,
+            "page_slug": slug,
+            "title": payload.title,
+            "last_updated": payload.last_updated
+        }
+    )
+    db.add(audit)
+    await db.commit()
+    
+    return {
+        "status": "success",
+        "message": f"Page '{slug}' updated successfully.",
+        "page": updated
+    }
+
+
+
 
 
 
