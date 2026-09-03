@@ -201,6 +201,19 @@ class WebsiteCreate(BaseModel):
     ecommerce_config: Optional[Dict[str, Any]] = None
     branding_config: Optional[Dict[str, Any]] = None
 
+class WebsiteUpdate(BaseModel):
+    assistant_id: Optional[uuid.UUID] = None
+    name: Optional[str] = None
+    domain: Optional[str] = None
+    primary_color: Optional[str] = None
+    header_title: Optional[str] = None
+    welcome_message: Optional[str] = None
+    position: Optional[str] = None
+    business_category: Optional[str] = None
+    ecommerce_config: Optional[Dict[str, Any]] = None
+    branding_config: Optional[Dict[str, Any]] = None
+    is_active: Optional[bool] = None
+
 class WebsiteOut(BaseModel):
     id: uuid.UUID
     assistant_id: Optional[uuid.UUID]

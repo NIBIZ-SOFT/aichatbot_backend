@@ -7,14 +7,14 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.core.security import encrypt_secret
 from app.api.v1.auth import get_current_user
-from app.models.all_models import Tenant, AIAssistant, KnowledgeBase, Website, User
+from app.models.all_models import Tenant, AIAssistant, KnowledgeBase, Website, User, UserRole
 from app.schemas.schemas import (
     TenantOut, TenantUpdate,
     AIAssistantCreate, AIAssistantUpdate, AIAssistantOut,
     KnowledgeBaseCreate, KnowledgeBaseOut,
     KnowledgeIngestText, KnowledgeIngestFAQ, KnowledgeSearchSandbox, KnowledgeSearchResult,
     TestChatPayload,
-    WebsiteCreate, WebsiteOut
+    WebsiteCreate, WebsiteUpdate, WebsiteOut
 )
 from app.services.rag.rag_service import RAGService
 from app.services.ai.safety_rules import AISafetyAndRulesEngine
@@ -347,7 +347,7 @@ async def list_knowledge_docs(
     )
     return result.scalars().all()
 
-# ----------------- WIDGET / WEBSITE CREATION -----------------
+# ----------------- WIDGET / WEBSITE CREATION & MANAGEMENT -----------------
 @router.post("/widgets", response_model=WebsiteOut)
 @router.post("/websites", response_model=WebsiteOut)
 async def create_widget(
@@ -355,22 +355,122 @@ async def create_widget(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    # Ensure user has an active tenant_id
+    if not user.tenant_id:
+        if user.role == UserRole.SUPER_ADMIN:
+            from app.api.v1.conversations import ensure_platform_live_support_widget
+            support_widget = await ensure_platform_live_support_widget(db)
+            if support_widget:
+                user.tenant_id = support_widget.tenant_id
+                await db.commit()
+                await db.refresh(user)
+        if not user.tenant_id:
+            raise HTTPException(status_code=400, detail="User does not belong to an active organization/tenant")
+
+    # Resolve assistant_id if not explicitly provided
+    assistant_id = payload.assistant_id
+    if not assistant_id:
+        asst_stmt = select(AIAssistant).where(AIAssistant.tenant_id == user.tenant_id, AIAssistant.is_active == True)
+        asst = (await db.execute(asst_stmt)).scalars().first()
+        if asst:
+            assistant_id = asst.id
+
     widget_key = f"wgt_{uuid.uuid4().hex[:18]}"
     site = Website(
         tenant_id=user.tenant_id,
-        assistant_id=payload.assistant_id,
+        assistant_id=assistant_id,
         widget_key=widget_key,
         name=payload.name,
         domain=payload.domain,
         primary_color=payload.primary_color,
         header_title=payload.header_title,
         welcome_message=payload.welcome_message,
-        position=payload.position
+        position=payload.position,
+        business_category=payload.business_category or "ecommerce",
+        ecommerce_config=payload.ecommerce_config or {},
+        branding_config=payload.branding_config or {}
     )
     db.add(site)
     await db.commit()
     await db.refresh(site)
     return site
+
+@router.patch("/widgets/{website_id}", response_model=WebsiteOut)
+@router.patch("/websites/{website_id}", response_model=WebsiteOut)
+@router.put("/websites/{website_id}", response_model=WebsiteOut)
+async def update_widget(
+    website_id: uuid.UUID,
+    payload: WebsiteUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    site_stmt = select(Website).where(Website.id == website_id)
+    if user.role != UserRole.SUPER_ADMIN:
+        site_stmt = site_stmt.where(Website.tenant_id == user.tenant_id)
+    
+    res = await db.execute(site_stmt)
+    site = res.scalars().first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Website widget not found")
+
+    if payload.name is not None:
+        site.name = payload.name
+    if payload.domain is not None:
+        site.domain = payload.domain
+    if payload.assistant_id is not None:
+        site.assistant_id = payload.assistant_id
+    if payload.primary_color is not None:
+        site.primary_color = payload.primary_color
+    if payload.header_title is not None:
+        site.header_title = payload.header_title
+    if payload.welcome_message is not None:
+        site.welcome_message = payload.welcome_message
+    if payload.position is not None:
+        site.position = payload.position
+    if payload.business_category is not None:
+        site.business_category = payload.business_category
+    if payload.ecommerce_config is not None:
+        from sqlalchemy.orm.attributes import flag_modified
+        cur_ecom = dict(site.ecommerce_config or {})
+        cur_ecom.update(payload.ecommerce_config)
+        site.ecommerce_config = cur_ecom
+        flag_modified(site, "ecommerce_config")
+    if payload.branding_config is not None:
+        from sqlalchemy.orm.attributes import flag_modified
+        cur_brand = dict(site.branding_config or {})
+        cur_brand.update(payload.branding_config)
+        site.branding_config = cur_brand
+        flag_modified(site, "branding_config")
+    if payload.is_active is not None:
+        site.is_active = payload.is_active
+
+    await db.commit()
+    await db.refresh(site)
+    return site
+
+@router.delete("/widgets/{website_id}")
+@router.delete("/websites/{website_id}")
+async def delete_widget(
+    website_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    site_stmt = select(Website).where(Website.id == website_id)
+    if user.role != UserRole.SUPER_ADMIN:
+        site_stmt = site_stmt.where(Website.tenant_id == user.tenant_id)
+
+    res = await db.execute(site_stmt)
+    site = res.scalars().first()
+    if not site:
+        raise HTTPException(status_code=404, detail="Website widget not found")
+
+    # Prevent deleting platform support widget
+    if site.widget_key == "wgt_platform_live_support":
+        raise HTTPException(status_code=400, detail="Cannot delete the official platform live support widget")
+
+    await db.delete(site)
+    await db.commit()
+    return {"status": "success", "message": "Website widget deleted successfully"}
 
 @router.get("/widgets", response_model=List[WebsiteOut])
 @router.get("/websites", response_model=List[WebsiteOut])
@@ -378,5 +478,20 @@ async def list_widgets(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(Website).where(Website.tenant_id == user.tenant_id))
+    if not user.tenant_id:
+        if user.role == UserRole.SUPER_ADMIN:
+            from app.api.v1.conversations import ensure_platform_live_support_widget
+            support_widget = await ensure_platform_live_support_widget(db)
+            if support_widget:
+                user.tenant_id = support_widget.tenant_id
+                await db.commit()
+                await db.refresh(user)
+        else:
+            return []
+
+    result = await db.execute(
+        select(Website)
+        .where(Website.tenant_id == user.tenant_id)
+        .order_by(Website.created_at.desc())
+    )
     return result.scalars().all()
