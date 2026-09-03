@@ -1466,6 +1466,7 @@ class PricingEnginePayload(BaseModel):
     pay_as_you_go_enabled: bool = True
     custom_slider_builder_enabled: bool = True
     min_wallet_topup_bdt: float = 100.0
+    annual_discount_percentage: float = 15.0
     base_custom_platform_fee_bdt: float = 1990.0
     per_extra_agent_bdt: float = 750.0
     per_extra_website_bdt: float = 1200.0
@@ -1488,7 +1489,7 @@ async def update_superadmin_pricing_engine(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Updates global AI token unit rate, minimum top-up, and Pay-As-You-Go visibility toggle.
+    Updates global AI token unit rate, minimum top-up, annual discount, and Pay-As-You-Go visibility toggle.
     """
     data = payload.model_dump()
     updated = await PricingService.update_pricing_engine_config(db, data)
@@ -1502,7 +1503,8 @@ async def update_superadmin_pricing_engine(
         metadata_json={
             "admin_email": admin.email,
             "default_per_10k_rate": payload.default_per_10k_tokens_rate_bdt,
-            "pay_as_you_go_enabled": payload.pay_as_you_go_enabled
+            "pay_as_you_go_enabled": payload.pay_as_you_go_enabled,
+            "annual_discount_percentage": payload.annual_discount_percentage
         }
     )
     db.add(audit)
