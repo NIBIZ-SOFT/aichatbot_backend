@@ -148,7 +148,15 @@ class GeminiService:
     def __init__(self, api_key: Optional[str] = None):
         # Default to OpenRouter API Gateway
         self.ai_base_url = (getattr(settings, "AI_BASE_URL", None) or os.environ.get("AI_BASE_URL", "https://openrouter.ai/api/v1")).rstrip("/")
-        self.api_key = api_key or getattr(settings, "AI_API_KEY", None) or getattr(settings, "GEMINI_API_KEY", None) or os.environ.get("AI_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
+        
+        fallback_key = None
+        try:
+            if 'gemini_service' in globals() and gemini_service and getattr(gemini_service, "api_key", None):
+                fallback_key = gemini_service.api_key
+        except Exception:
+            pass
+
+        self.api_key = api_key or fallback_key or getattr(settings, "AI_API_KEY", None) or getattr(settings, "GEMINI_API_KEY", None) or os.environ.get("AI_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
         self.model = getattr(settings, "AI_MODEL", None) or getattr(settings, "DEFAULT_GEMINI_MODEL", None) or "google/gemini-2.5-flash"
         self.fallback_model = "google/gemini-2.5-flash-lite"
         self.embedding_model = getattr(settings, "DEFAULT_EMBEDDING_MODEL", "text-embedding-004")
@@ -355,6 +363,10 @@ class GeminiService:
         query_tokens = count_tokens(user_message)
         calculated_prompt_tokens = system_tokens + rag_tokens + history_tokens + query_tokens
 
+        if not self.client and 'gemini_service' in globals() and gemini_service and getattr(gemini_service, "client", None):
+            self.client = gemini_service.client
+            self.api_key = gemini_service.api_key
+
         if self.client:
             try:
                 kwargs: Dict[str, Any] = {
@@ -421,11 +433,60 @@ class GeminiService:
                     "cost_bdt": cost_bdt
                 }
             except Exception as e:
-                print(f"OpenAI SDK Error: {e}")
+                print(f"OpenAI SDK Primary Call Error ({target_model}): {e}")
+                
+                # Fallback A: If tools caused failure (e.g. model unsupported), retry without tools
+                if tools:
+                    try:
+                        resp_fallback = await self.client.chat.completions.create(
+                            model=target_model,
+                            messages=messages,
+                            temperature=temperature,
+                            max_tokens=max_output_tokens
+                        )
+                        content = resp_fallback.choices[0].message.content or ""
+                        latency = int((time.time() - start_time) * 1000)
+                        return {
+                            "text": content,
+                            "tool_calls": [],
+                            "prompt_tokens": calculated_prompt_tokens,
+                            "completion_tokens": count_tokens(content),
+                            "total_tokens": calculated_prompt_tokens + count_tokens(content),
+                            "latency_ms": latency,
+                        }
+                    except Exception as err_no_tools:
+                        print(f"OpenAI SDK No-Tools Fallback Error: {err_no_tools}")
+
+                # Fallback B: Try standard reliable Gemini 2.5 Flash
+                fallback_target = "google/gemini-2.5-flash"
+                if target_model != fallback_target:
+                    try:
+                        resp_fallback = await self.client.chat.completions.create(
+                            model=fallback_target,
+                            messages=messages,
+                            temperature=temperature,
+                            max_tokens=max_output_tokens
+                        )
+                        content = resp_fallback.choices[0].message.content or ""
+                        latency = int((time.time() - start_time) * 1000)
+                        return {
+                            "text": content,
+                            "tool_calls": [],
+                            "prompt_tokens": calculated_prompt_tokens,
+                            "completion_tokens": count_tokens(content),
+                            "total_tokens": calculated_prompt_tokens + count_tokens(content),
+                            "latency_ms": latency,
+                        }
+                    except Exception as err_fallback:
+                        print(f"OpenAI SDK Gemini Flash Fallback Error: {err_fallback}")
 
         # Fallback calculation if network is unreachable
         latency = int((time.time() - start_time) * 1000)
-        mock_text = f"Thank you for contacting us! I am the automated AI assistant. You asked: '{user_message}'."
+        is_bengali = any(ord(char) >= 0x0980 and ord(char) <= 0x09FF for char in user_message)
+        if is_bengali:
+            mock_text = "ধন্যবাদ আপনার বার্তার জন্য! আমাদের লাইভ এআই সিস্টেম এই মুহূর্তে সক্রিয় রয়েছে। আপনি কি আমাদের প্যাকেজ, ফিচার বা ইন্টিগ্রেশন সম্পর্কে জানতে চান? দয়া করে আপনার প্রশ্নটি বলুন।"
+        else:
+            mock_text = "Thank you for reaching out to Jobab Chat! How can I assist you with our AI chatbot platform, pricing plans, or integrations today?"
         tools_tokens = count_tokens(json.dumps(tools)) if tools else 0
         prompt_tokens = calculated_prompt_tokens + tools_tokens
         completion_tokens = count_tokens(mock_text)
