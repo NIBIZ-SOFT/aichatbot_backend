@@ -428,6 +428,16 @@ async def seed_database(wipe_all_client_data: bool = True):
                 await db.commit()
             print("[SEED] Official Platform Live Support Chatbot already active.")
 
+        # Ensure Super Admin is linked to Platform Live Support Tenant
+        admin_res = await db.execute(select(User).where(User.email == "admin@gmail.com"))
+        admin_user = admin_res.scalars().first()
+        if admin_user:
+            support_target_tenant = existing_support.tenant_id if existing_support else new_website.tenant_id
+            if admin_user.tenant_id != support_target_tenant:
+                admin_user.tenant_id = support_target_tenant
+                await db.commit()
+                print(f"[SEED] Master Super Admin linked to Platform Live Support Tenant ({support_target_tenant})!")
+
         await db.commit()
 
     print("=== [PRODUCTION SEEDER COMPLETE] Database is 100% clean and production-ready! ===")

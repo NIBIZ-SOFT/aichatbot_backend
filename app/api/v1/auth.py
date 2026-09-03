@@ -34,6 +34,17 @@ async def get_current_user(
     user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found or inactive")
+
+    # Connect Super Admin to Platform Live Support Chatbot Tenant
+    if user.role == UserRole.SUPER_ADMIN and not user.tenant_id:
+        w_stmt = select(Website).where(Website.widget_key == "wgt_platform_live_support")
+        w_res = await db.execute(w_stmt)
+        w = w_res.scalars().first()
+        if w:
+            user.tenant_id = w.tenant_id
+            await db.commit()
+            await db.refresh(user)
+
     return user
 
 async def get_optional_current_user(
@@ -255,6 +266,16 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)):
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is disabled")
+
+    # Connect Super Admin to Platform Live Support Chatbot Tenant
+    if user.role == UserRole.SUPER_ADMIN and not user.tenant_id:
+        w_stmt = select(Website).where(Website.widget_key == "wgt_platform_live_support")
+        w_res = await db.execute(w_stmt)
+        w = w_res.scalars().first()
+        if w:
+            user.tenant_id = w.tenant_id
+            await db.commit()
+            await db.refresh(user)
 
     access_token = create_access_token(
         subject=str(user.id),
