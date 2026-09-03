@@ -1361,21 +1361,31 @@
       chipsBox.innerHTML = "";
 
       var chips = [];
-      if (category === "erp") {
+      var cat = (category || "").toLowerCase();
+
+      if (cat === "saas" || cat === "platform" || cat === "software" || !isEcom) {
+        // SaaS / Platform / Lead Generation & Live Support (e.g. Jobab Chat)
+        chips = [
+          { text: "🚀 Pricing & Plans", query: "Jobab Chat এর প্যাকেজ ও প্রাইসিং সম্পর্কে বিস্তারিত জানতে চাই" },
+          { text: "⚡ Book Free Demo", query: "আমাদের ব্যবসার জন্য Jobab Chat এর একটি লাইভ ডেমো দেখতে চাই" },
+          { text: "🧩 AI & Integrations", query: "Jobab Chat এর AI ফিচার ও ওয়েবসাইট ইন্টিগ্রেশন কিভাবে কাজ করে?" },
+          { text: "👤 Talk to Human Agent", action: "handover" }
+        ];
+      } else if (cat === "erp") {
         chips = [
           { text: "📅 Book Live Demo", query: "আমাদের ফ্যাক্টরির জন্য একটি লাইভ ডেমো শিডিউল করতে চাই" },
           { text: "🎫 Open SLA Ticket", query: "আমাদের ব্যাংক রিকনসিলিয়েশন ও Mushak 6.3 ভ্যাটে এরর আসছে, আর্জেন্ট সাপোর্ট টিকেট দরকার" },
           { text: "💰 Pricing & Plans", query: "Apex ERP এর মাসিক প্রাইসিং কত এবং কি কি প্যাকেজ আছে?" },
           { text: "👤 Talk to Specialist", action: "handover" }
         ];
-      } else if (category === "services") {
+      } else if (cat === "services") {
         chips = [
           { text: "📅 Book Consultation", query: "আমি একটি কনসালটেশন শিডিউল করতে চাই" },
           { text: "💼 Our Services", query: "আপনাদের সার্ভিস ও প্যাকেজ সম্পর্কে জানতে চাই" },
           { text: "👤 Talk to Consultant", action: "handover" }
         ];
-      } else {
-        // E-Commerce
+      } else if (isEcom) {
+        // E-Commerce Retail Store Selling Physical Goods
         chips = [
           { text: "🛍️ Browse Products", action: "browse" },
           { text: "📦 Track Order", query: "আমার অর্ডার ট্র্যাক করতে চাই" },
