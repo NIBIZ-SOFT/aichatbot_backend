@@ -59,6 +59,16 @@ async def lifespan(app: FastAPI):
                     # Guarantee admin@gmail.com is linked to this platform support tenant
                     await session.execute(text(f"UPDATE users SET tenant_id = '{widget_row.tenant_id}' WHERE email = 'admin@gmail.com' AND (tenant_id IS NULL OR tenant_id != '{widget_row.tenant_id}');"))
                     await session.commit()
+
+        # Load platform AI configuration from PostgreSQL into global gemini_service
+        async with AsyncSessionLocal() as session:
+            from app.models.all_models import PlatformSetting
+            stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_ai_config")
+            ai_setting = (await session.execute(stmt)).scalars().first()
+            if ai_setting and ai_setting.value_json:
+                from app.services.ai.gemini import gemini_service
+                gemini_service.update_config(ai_setting.value_json)
+                print(f"[STARTUP] AI Engine initialized from Database: model={gemini_service.model}, key_configured={bool(gemini_service.api_key)}")
     except Exception as e:
         print(f"[AUTO-SEED WARNING] Startup seeder check skipped: {str(e)}")
 
@@ -134,10 +144,12 @@ async def add_no_cache_header(request, call_next):
 # Mount API routes
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# Direct root WebSocket mounting for seamless fallback
+# Direct root and API v1 WebSocket mounting for seamless fallback
 from app.api.v1.conversations import websocket_chat_endpoint, websocket_inbox_endpoint
 app.add_api_websocket_route("/ws/chat/{conversation_id}", websocket_chat_endpoint)
 app.add_api_websocket_route("/ws/inbox/{tenant_id}", websocket_inbox_endpoint)
+app.add_api_websocket_route(f"{settings.API_V1_STR}/ws/chat/{{conversation_id}}", websocket_chat_endpoint)
+app.add_api_websocket_route(f"{settings.API_V1_STR}/ws/inbox/{{tenant_id}}", websocket_inbox_endpoint)
 
 # Mount Static directory for embeddable widget.js & demo pages
 static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")

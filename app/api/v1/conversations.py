@@ -562,8 +562,19 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
                 "is_handover_requested": wants_handover
             }
 
+        # Resolve AI engine: Tenant Custom BYOK key OR Platform Master AI Service
         custom_key = decrypt_secret(tenant.encrypted_gemini_key) if tenant and tenant.encrypted_gemini_key else None
-        gemini = GeminiService(api_key=custom_key)
+        if custom_key:
+            gemini = GeminiService(api_key=custom_key)
+        else:
+            if not gemini_service.api_key:
+                from app.models.all_models import PlatformSetting
+                stmt = select(PlatformSetting).where(PlatformSetting.key == "platform_ai_config")
+                ai_setting = (await db.execute(stmt)).scalars().first()
+                if ai_setting and ai_setting.value_json:
+                    gemini_service.update_config(ai_setting.value_json)
+            gemini = gemini_service
+
         rag_service = RAGService(db=db, gemini_service=gemini)
         
         # 1. Intent Context Routing & Vector RAG Filtering

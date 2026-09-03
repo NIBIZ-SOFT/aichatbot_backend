@@ -2752,6 +2752,11 @@
           isWsConnected = true;
         };
 
+        socket.onerror = function () {
+          // Graceful fallback: connection degraded to HTTP polling without unhandled error
+          isWsConnected = false;
+        };
+
         socket.onclose = function () {
           isWsConnected = false;
         };
