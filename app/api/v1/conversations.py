@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.security import decrypt_secret
 from app.api.v1.auth import get_current_user
 from app.models.all_models import (
-    Website, Conversation, Message, AIAssistant, Tenant,
+    Website, Conversation, Message, AIAssistant, Tenant, Subscription, SubscriptionTier, SubscriptionStatus,
     ConversationStatus, ConversationPriority, SenderType, User, UsageRecord, Contact, UserRole,
     Product, Order
 )
@@ -61,13 +61,25 @@ async def ensure_platform_live_support_widget(db: AsyncSession) -> Optional[Webs
                     id=uuid.uuid4(),
                     name="Jobab Chat Platform Support",
                     slug="platform-support",
-                    subscription_tier="ENTERPRISE",
                     is_active=True,
-                    monthly_token_limit=100000000,
-                    used_tokens=0,
                     business_category="saas"
                 )
                 db.add(tenant)
+                await db.flush()
+
+                support_sub = Subscription(
+                    id=uuid.uuid4(),
+                    tenant_id=tenant.id,
+                    tier=SubscriptionTier.ENTERPRISE,
+                    plan_code="enterprise",
+                    status=SubscriptionStatus.ACTIVE,
+                    monthly_token_limit=100000000,
+                    monthly_conversation_limit=50000,
+                    max_agents=100,
+                    max_websites=100,
+                    max_knowledge_docs=500
+                )
+                db.add(support_sub)
                 await db.flush()
 
         # Find or create Assistant
@@ -78,7 +90,7 @@ async def ensure_platform_live_support_widget(db: AsyncSession) -> Optional[Webs
                 id=uuid.uuid4(),
                 tenant_id=tenant.id,
                 name="Jobab Live Concierge",
-                system_prompt="You are the official Jobab Chat live sales & customer support specialist. Help visitors with information about pricing plans, bKash/Nagad integration, AI features, and lead booking in both English and Bengali.",
+                system_instruction="You are the official Jobab Chat live sales & customer support specialist. Help visitors with information about pricing plans, bKash/Nagad integration, AI features, and lead booking in both English and Bengali.",
                 model_name="google/gemini-2.5-flash",
                 temperature=0.3
             )
