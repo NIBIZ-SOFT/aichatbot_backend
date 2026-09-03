@@ -1622,6 +1622,89 @@ async def update_tenant_pricing_contract(
     }
 
 
+# ----------------- 14. SEO & META DATA CONFIGURATION -----------------
+
+class SeoMetadataPayload(BaseModel):
+    meta_title: Optional[str] = None
+    meta_description: Optional[str] = None
+    meta_keywords: Optional[str] = None
+    canonical_url: Optional[str] = None
+    author: Optional[str] = None
+    robots: Optional[str] = "index, follow"
+    og_title: Optional[str] = None
+    og_description: Optional[str] = None
+    og_image_url: Optional[str] = None
+    og_type: Optional[str] = "website"
+    og_site_name: Optional[str] = "Jobab Chat"
+    og_locale: Optional[str] = "en_US"
+    twitter_card: Optional[str] = "summary_large_image"
+    twitter_title: Optional[str] = None
+    twitter_description: Optional[str] = None
+    twitter_image_url: Optional[str] = None
+    twitter_creator: Optional[str] = None
+    google_site_verification: Optional[str] = None
+    bing_site_verification: Optional[str] = None
+    google_analytics_id: Optional[str] = None
+    google_tag_manager_id: Optional[str] = None
+    facebook_pixel_id: Optional[str] = None
+    schema_org_name: Optional[str] = "Jobab Chat"
+    schema_org_url: Optional[str] = "https://jobab.chat"
+    schema_org_logo: Optional[str] = "https://jobab.chat/logo.png"
+    schema_application_category: Optional[str] = "BusinessApplication"
+    schema_price_currency: Optional[str] = "BDT"
+    schema_price_min: Optional[float] = 4990.0
+    schema_rating_value: Optional[float] = 4.9
+    schema_review_count: Optional[int] = 128
+
+@router.get("/meta-data")
+async def get_superadmin_seo_metadata(
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Returns platform SEO metadata configuration for Super Admin.
+    """
+    from app.services.seo.seo_service import SeoService
+    return await SeoService.get_seo_metadata(db)
+
+@router.put("/meta-data")
+async def update_superadmin_seo_metadata(
+    payload: SeoMetadataPayload,
+    admin: User = Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Updates platform SEO metadata, Open Graph, Twitter cards, schema tags and verification IDs.
+    """
+    from app.services.seo.seo_service import SeoService
+    dump = {k: v for k, v in payload.model_dump().items() if v is not None}
+    updated = await SeoService.update_seo_metadata(db, dump)
+    
+    audit = AuditLog(
+        tenant_id=None,
+        user_id=admin.id,
+        action="superadmin.seo_metadata_updated",
+        resource_type="system_config",
+        resource_id="platform_seo_metadata",
+        metadata_json={
+            "admin_email": admin.email,
+            "meta_title": payload.meta_title,
+            "canonical_url": payload.canonical_url,
+            "has_google_verification": bool(payload.google_site_verification),
+            "has_ga_id": bool(payload.google_analytics_id)
+        }
+    )
+    db.add(audit)
+    await db.commit()
+    
+    return {
+        "status": "success",
+        "message": "Platform SEO & Meta Data updated successfully.",
+        "config": updated
+    }
+
+
+
 
 
 

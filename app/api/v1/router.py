@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     auth, tenants, conversations, operations, superadmin,
     analytics, payment, plans, ecommerce, widget_commerce, widget_payments,
-    health
+    health, meta_data
 )
 
 api_router = APIRouter()
@@ -18,5 +18,6 @@ api_router.include_router(analytics.router)
 api_router.include_router(payment.router)
 api_router.include_router(plans.router)
 api_router.include_router(ecommerce.router)
+api_router.include_router(meta_data.router)
 
 
