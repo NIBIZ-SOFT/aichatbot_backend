@@ -44,12 +44,20 @@ async def lifespan(app: FastAPI):
                 print("[AUTO-SEED] Startup seeding completed successfully!")
             else:
                 # Ensure platform official live support widget is always provisioned
-                widget_check = await session.execute(text("SELECT id FROM websites WHERE widget_key = 'wgt_platform_live_support' LIMIT 1;"))
-                if not widget_check.scalar_one_or_none():
+                widget_check = await session.execute(text("SELECT id, tenant_id FROM websites WHERE widget_key = 'wgt_platform_live_support' LIMIT 1;"))
+                widget_row = widget_check.first()
+                if not widget_row:
                     print("[STARTUP] Provisioning missing official platform live support chatbot...")
                     from app.api.v1.conversations import ensure_platform_live_support_widget
-                    await ensure_platform_live_support_widget(session)
+                    w = await ensure_platform_live_support_widget(session)
+                    if w:
+                        await session.execute(text(f"UPDATE users SET tenant_id = '{w.tenant_id}' WHERE email = 'admin@gmail.com' AND (tenant_id IS NULL OR tenant_id != '{w.tenant_id}');"))
+                        await session.commit()
                     print("[STARTUP] Official platform live support chatbot provisioned!")
+                else:
+                    # Guarantee admin@gmail.com is linked to this platform support tenant
+                    await session.execute(text(f"UPDATE users SET tenant_id = '{widget_row.tenant_id}' WHERE email = 'admin@gmail.com' AND (tenant_id IS NULL OR tenant_id != '{widget_row.tenant_id}');"))
+                    await session.commit()
     except Exception as e:
         print(f"[AUTO-SEED WARNING] Startup seeder check skipped: {str(e)}")
 
@@ -87,6 +95,11 @@ async def add_no_cache_header(request, call_next):
 
 # Mount API routes
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Direct root WebSocket mounting for seamless fallback
+from app.api.v1.conversations import websocket_chat_endpoint, websocket_inbox_endpoint
+app.add_api_websocket_route("/ws/chat/{conversation_id}", websocket_chat_endpoint)
+app.add_api_websocket_route("/ws/inbox/{tenant_id}", websocket_inbox_endpoint)
 
 # Mount Static directory for embeddable widget.js & demo pages
 static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")

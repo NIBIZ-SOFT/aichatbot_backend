@@ -102,6 +102,14 @@ async def ensure_platform_live_support_widget(db: AsyncSession) -> Optional[Webs
             }
         )
         db.add(widget)
+
+        # Link Super Admin user to this tenant if unlinked
+        admin_res = await db.execute(select(User).where(User.email == "admin@gmail.com"))
+        admin_user = admin_res.scalars().first()
+        if admin_user and admin_user.tenant_id != tenant.id:
+            admin_user.tenant_id = tenant.id
+            await db.flush()
+
         await db.commit()
 
         res = await db.execute(stmt)
@@ -308,7 +316,7 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
             website_id=widget.id,
             tenant_id=widget.tenant_id,
             visitor_session_id=payload.visitor_session_id,
-            status=ConversationStatus.ACTIVE,
+            status=ConversationStatus.AI_ACTIVE,
             priority=ConversationPriority.MEDIUM,
             created_at=datetime.now(timezone.utc)
         )
