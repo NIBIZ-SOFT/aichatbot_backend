@@ -602,19 +602,23 @@ async def list_subscription_invoices(
             inv_num = f"INV-2026-{str(sub.id)[:6].upper()}"
             if inv_num not in seen_invoices:
                 seen_invoices.add(inv_num)
-                invoices.append(
-                    InvoiceItemOut(
-                        id=str(sub.id),
-                        invoice_number=inv_num,
-                        date=sub.created_at,
-                        plan_name=f"{sub.tier.value.capitalize()} Package",
-                        billing_cycle=f"{sub.billing_cycle.value.capitalize()} ({sub.created_at.strftime('%b %Y')})",
-                        amount_bdt=price,
-                        payment_method="bKash Merchant Direct (Auto-Debit)",
-                        status="Paid & Verified",
-                        receipt_url="#"
-                    )
+            b_cycle = getattr(sub, "billing_cycle", "monthly")
+            if hasattr(b_cycle, "value"):
+                b_cycle = b_cycle.value
+            b_cycle_str = (b_cycle or "monthly").capitalize()
+            invoices.append(
+                InvoiceItemOut(
+                    id=str(sub.id),
+                    invoice_number=inv_num,
+                    date=sub.created_at,
+                    plan_name=f"{sub.tier.value.capitalize()} Package",
+                    billing_cycle=f"{b_cycle_str} ({sub.created_at.strftime('%b %Y')})",
+                    amount_bdt=price,
+                    payment_method="bKash Merchant Direct (Auto-Debit)",
+                    status="Paid & Verified",
+                    receipt_url="#"
                 )
+            )
 
     # 2. Fetch real subscription payment logs from AuditLog
     audit_stmt = (
