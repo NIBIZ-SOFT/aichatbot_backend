@@ -369,6 +369,65 @@ async def seed_database(wipe_all_client_data: bool = True):
                 )
                 db.add(new_c)
 
+        # 7. Seed Official Platform Live Support Website (wgt_platform_live_support)
+        support_stmt = select(Website).where(Website.widget_key == "wgt_platform_live_support")
+        existing_support = (await db.execute(support_stmt)).scalars().first()
+        if not existing_support:
+            print("[SEED] Creating Official Platform Live Support Chatbot (wgt_platform_live_support)...")
+            support_tenant_stmt = select(Tenant).where(Tenant.slug == "platform-support")
+            support_tenant = (await db.execute(support_tenant_stmt)).scalars().first()
+            if not support_tenant:
+                support_tenant = Tenant(
+                    id=uuid.uuid4(),
+                    name="Jobab Chat Platform Support",
+                    slug="platform-support",
+                    subscription_tier=SubscriptionTier.ENTERPRISE,
+                    is_active=True,
+                    monthly_token_limit=100000000,
+                    used_tokens=0,
+                    business_category="saas"
+                )
+                db.add(support_tenant)
+                await db.flush()
+
+            asst_stmt = select(AIAssistant).where(AIAssistant.tenant_id == support_tenant.id)
+            assistant = (await db.execute(asst_stmt)).scalars().first()
+            if not assistant:
+                assistant = AIAssistant(
+                    id=uuid.uuid4(),
+                    tenant_id=support_tenant.id,
+                    name="Jobab Live Concierge",
+                    system_prompt="You are the official Jobab Chat live sales & customer support specialist. Help visitors with information about pricing plans, bKash/Nagad integration, AI features, and lead booking in both English and Bengali.",
+                    model_name="google/gemini-2.5-flash",
+                    temperature=0.3
+                )
+                db.add(assistant)
+                await db.flush()
+
+            new_website = Website(
+                id=uuid.uuid4(),
+                tenant_id=support_tenant.id,
+                assistant_id=assistant.id,
+                name="Platform Official Live Support Chatbot",
+                domain="jobab.chat",
+                widget_key="wgt_platform_live_support",
+                is_active=True,
+                business_category="saas",
+                branding_config={
+                    "primary_color": "#4F46E5",
+                    "header_title": "Jobab Chat Support",
+                    "welcome_message": "Hello! Welcome to Jobab Chat. How can we help your business today?"
+                }
+            )
+            db.add(new_website)
+            await db.commit()
+            print("[SEED] Official Platform Live Support Chatbot seeded successfully!")
+        else:
+            if not existing_support.is_active:
+                existing_support.is_active = True
+                await db.commit()
+            print("[SEED] Official Platform Live Support Chatbot already active.")
+
         await db.commit()
 
     print("=== [PRODUCTION SEEDER COMPLETE] Database is 100% clean and production-ready! ===")

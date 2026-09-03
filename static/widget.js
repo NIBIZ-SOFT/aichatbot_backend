@@ -2755,11 +2755,32 @@
         });
 
         if (!res.ok) {
-          throw new Error("Failed to send message");
+          if (res.status === 404 && !conversationId) {
+            await initSession();
+            if (conversationId) {
+              res = await fetch(`${apiUrl}/public/widget/message`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  widget_key: widgetKey,
+                  conversation_id: conversationId,
+                  visitor_session_id: visitorSessionId,
+                  content: text,
+                  message: text
+                })
+              });
+            }
+          }
+          if (!res.ok) {
+            throw new Error("Failed to send message (HTTP " + res.status + ")");
+          }
         }
 
         var data = await res.json();
         hideTyping();
+        if (data.conversation_id && !conversationId) {
+          conversationId = data.conversation_id;
+        }
 
         if (data.is_handover_requested) {
           updateAIStatusUI(true);

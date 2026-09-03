@@ -42,6 +42,14 @@ async def lifespan(app: FastAPI):
                 from app.seed import seed_database
                 await seed_database()
                 print("[AUTO-SEED] Startup seeding completed successfully!")
+            else:
+                # Ensure platform official live support widget is always provisioned
+                widget_check = await session.execute(text("SELECT id FROM websites WHERE widget_key = 'wgt_platform_live_support' LIMIT 1;"))
+                if not widget_check.scalar_one_or_none():
+                    print("[STARTUP] Provisioning missing official platform live support chatbot...")
+                    from app.api.v1.conversations import ensure_platform_live_support_widget
+                    await ensure_platform_live_support_widget(session)
+                    print("[STARTUP] Official platform live support chatbot provisioned!")
     except Exception as e:
         print(f"[AUTO-SEED WARNING] Startup seeder check skipped: {str(e)}")
 
