@@ -13,7 +13,7 @@ from app.core.security import decrypt_secret
 from app.api.v1.auth import get_current_user
 from app.models.all_models import (
     Website, Conversation, Message, AIAssistant, Tenant,
-    ConversationStatus, SenderType, User, UsageRecord, Contact, UserRole,
+    ConversationStatus, ConversationPriority, SenderType, User, UsageRecord, Contact, UserRole,
     Product, Order
 )
 from app.schemas.schemas import (
@@ -34,6 +34,83 @@ from app.services.sms.sms_service import SMSService
 
 router = APIRouter(tags=["Live Chat & Inbox"])
 
+async def ensure_platform_live_support_widget(db: AsyncSession) -> Optional[Website]:
+    """Auto-provision official platform live support website & assistant if missing."""
+    try:
+        stmt = (
+            select(Website)
+            .options(selectinload(Website.assistant))
+            .where(Website.widget_key == "wgt_platform_live_support")
+        )
+        res = await db.execute(stmt)
+        widget = res.scalars().first()
+        if widget:
+            if not widget.is_active:
+                widget.is_active = True
+                await db.commit()
+            return widget
+
+        # Find or create Platform Tenant
+        tenant_stmt = select(Tenant).where(Tenant.slug == "platform-support")
+        tenant = (await db.execute(tenant_stmt)).scalars().first()
+        if not tenant:
+            tenant_stmt2 = select(Tenant).where(Tenant.name == "Jobab Chat Platform Support")
+            tenant = (await db.execute(tenant_stmt2)).scalars().first()
+            if not tenant:
+                tenant = Tenant(
+                    id=uuid.uuid4(),
+                    name="Jobab Chat Platform Support",
+                    slug="platform-support",
+                    subscription_tier="ENTERPRISE",
+                    is_active=True,
+                    monthly_token_limit=100000000,
+                    used_tokens=0,
+                    business_category="saas"
+                )
+                db.add(tenant)
+                await db.flush()
+
+        # Find or create Assistant
+        asst_stmt = select(AIAssistant).where(AIAssistant.tenant_id == tenant.id)
+        assistant = (await db.execute(asst_stmt)).scalars().first()
+        if not assistant:
+            assistant = AIAssistant(
+                id=uuid.uuid4(),
+                tenant_id=tenant.id,
+                name="Jobab Live Concierge",
+                system_prompt="You are the official Jobab Chat live sales & customer support specialist. Help visitors with information about pricing plans, bKash/Nagad integration, AI features, and lead booking in both English and Bengali.",
+                model_name="google/gemini-2.5-flash",
+                temperature=0.3
+            )
+            db.add(assistant)
+            await db.flush()
+
+        # Create Website
+        widget = Website(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            assistant_id=assistant.id,
+            name="Platform Official Live Support Chatbot",
+            domain="jobab.chat",
+            widget_key="wgt_platform_live_support",
+            is_active=True,
+            business_category="saas",
+            branding_config={
+                "primary_color": "#4F46E5",
+                "header_title": "Jobab Chat Support",
+                "welcome_message": "Hello! Welcome to Jobab Chat. How can we help your business today?"
+            }
+        )
+        db.add(widget)
+        await db.commit()
+
+        res = await db.execute(stmt)
+        return res.scalars().first()
+    except Exception as e:
+        print(f"[WIDGET AUTO-PROVISION ERROR] {e}")
+        await db.rollback()
+        return None
+
 # ----------------- PUBLIC WIDGET APIS (LAYER 3) -----------------
 @router.post("/public/widget/init")
 async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Depends(get_db)):
@@ -41,6 +118,8 @@ async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Dep
     widget_stmt = select(Website).where(Website.widget_key == payload.widget_key, Website.is_active == True)
     widget_res = await db.execute(widget_stmt)
     widget = widget_res.scalars().first()
+    if not widget and payload.widget_key == "wgt_platform_live_support":
+        widget = await ensure_platform_live_support_widget(db)
     if not widget:
         raise HTTPException(status_code=404, detail="Invalid or inactive widget key")
 
@@ -211,6 +290,8 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
     )
     widget_res = await db.execute(widget_stmt)
     widget = widget_res.scalars().first()
+    if not widget and payload.widget_key == "wgt_platform_live_support":
+        widget = await ensure_platform_live_support_widget(db)
     if not widget:
         raise HTTPException(status_code=404, detail="Widget not found")
 
@@ -222,7 +303,17 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
     conv_res = await db.execute(conv_stmt)
     conversation = conv_res.scalars().first()
     if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not initialized")
+        conversation = Conversation(
+            id=uuid.uuid4(),
+            website_id=widget.id,
+            tenant_id=widget.tenant_id,
+            visitor_session_id=payload.visitor_session_id,
+            status=ConversationStatus.ACTIVE,
+            priority=ConversationPriority.MEDIUM,
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(conversation)
+        await db.flush()
 
     # 1. Store visitor message
     msg_text = (payload.content or payload.message or "").strip()
