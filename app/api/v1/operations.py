@@ -486,7 +486,6 @@ async def change_subscription_plan(
 
     from app.models.all_models import SubscriptionTier, SubscriptionStatus
     target_tier_str = payload.tier.lower()
-    plan = await PricingService.get_plan_by_code(db, target_tier_str)
     
     tier_map = {
         "free": SubscriptionTier.FREE,
@@ -494,25 +493,42 @@ async def change_subscription_plan(
         "growth": SubscriptionTier.GROWTH,
         "enterprise": SubscriptionTier.ENTERPRISE
     }
-    
-    if plan:
-        token_limit = plan.monthly_token_limit
-        tier_enum = tier_map.get(target_tier_str, SubscriptionTier.GROWTH)
-        max_agents = plan.max_agents
-        max_websites = plan.max_websites
-        max_knowledge_docs = plan.max_knowledge_docs
+
+    is_custom_deal = False
+    locked_price = 0.0
+    deal_notes = None
+
+    if target_tier_str == "custom" or payload.custom_config is not None:
+        cfg = payload.custom_config or {}
+        token_limit = int(cfg.get("tokens", 1_000_000))
+        max_agents = int(cfg.get("seats", 2))
+        max_websites = int(cfg.get("websites", 1))
+        max_knowledge_docs = int(cfg.get("knowledge_docs", 50))
+        tier_enum = SubscriptionTier.GROWTH
+        is_custom_deal = True
+        locked_price = float(cfg.get("price") or cfg.get("monthlyPrice") or 3340.0)
+        deal_notes = f"Custom Builder Upgrade: {token_limit:,} tokens, {max_agents} seats, {max_websites} sites (৳{locked_price:,.2f})"
+        plan = None
     else:
-        tier_limits = {
-            "free": 50_000,
-            "starter": 500_000,
-            "growth": 2_500_000,
-            "enterprise": 10_000_000
-        }
-        tier_enum = tier_map.get(target_tier_str, SubscriptionTier.STARTER)
-        token_limit = tier_limits.get(target_tier_str, 500_000)
-        max_agents = 2
-        max_websites = 1
-        max_knowledge_docs = 10
+        plan = await PricingService.get_plan_by_code(db, target_tier_str)
+        if plan:
+            token_limit = plan.monthly_token_limit
+            tier_enum = tier_map.get(target_tier_str, SubscriptionTier.GROWTH)
+            max_agents = plan.max_agents
+            max_websites = plan.max_websites
+            max_knowledge_docs = plan.max_knowledge_docs
+        else:
+            tier_limits = {
+                "free": 50_000,
+                "starter": 500_000,
+                "growth": 2_500_000,
+                "enterprise": 10_000_000
+            }
+            tier_enum = tier_map.get(target_tier_str, SubscriptionTier.STARTER)
+            token_limit = tier_limits.get(target_tier_str, 500_000)
+            max_agents = 2
+            max_websites = 1
+            max_knowledge_docs = 10
 
     sub_stmt = select(Subscription).where(Subscription.tenant_id == user.tenant_id)
     sub = (await db.execute(sub_stmt)).scalars().first()
@@ -526,24 +542,35 @@ async def change_subscription_plan(
             tier=tier_enum,
             plan_code=target_tier_str,
             status=SubscriptionStatus.ACTIVE,
+            billing_cycle=payload.billing_cycle or "monthly",
             monthly_token_limit=token_limit,
             max_agents=max_agents,
             max_websites=max_websites,
             max_knowledge_docs=max_knowledge_docs,
             current_period_start=now,
-            current_period_end=next_month
+            current_period_end=next_month,
+            locked_price_bdt=locked_price if is_custom_deal else 0.0,
+            locked_token_limit=token_limit if is_custom_deal else token_limit,
+            is_custom_deal=is_custom_deal,
+            deal_notes=deal_notes if is_custom_deal else None
         )
         db.add(sub)
     else:
         sub.tier = tier_enum
         sub.plan_code = target_tier_str
         sub.status = SubscriptionStatus.ACTIVE
+        sub.billing_cycle = payload.billing_cycle or "monthly"
         sub.monthly_token_limit = token_limit
         sub.max_agents = max_agents
         sub.max_websites = max_websites
         sub.max_knowledge_docs = max_knowledge_docs
         sub.current_period_start = now
         sub.current_period_end = next_month
+        if is_custom_deal:
+            sub.is_custom_deal = True
+            sub.locked_price_bdt = locked_price
+            sub.locked_token_limit = token_limit
+            sub.deal_notes = deal_notes
 
     # Record Audit Log
     audit = AuditLog(

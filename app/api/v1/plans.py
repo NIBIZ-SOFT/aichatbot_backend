@@ -105,6 +105,10 @@ async def get_custom_plan_quote(payload: dict, db: AsyncSession = Depends(get_db
     Computes real-time dynamic pricing quote for interactive sliders & custom packages.
     """
     from app.services.billing.wallet_service import WalletService
+    config = await PricingService.get_pricing_engine_config(db)
+    token_rate = float(config.get("default_per_10k_tokens_rate_bdt", 1.50))
+    annual_discount = float(config.get("annual_discount_percentage", 15.0))
+
     tokens = int(payload.get("tokens", 1_000_000))
     seats = int(payload.get("seats", 2))
     websites = int(payload.get("websites", 1))
@@ -118,7 +122,9 @@ async def get_custom_plan_quote(payload: dict, db: AsyncSession = Depends(get_db
         websites=websites,
         knowledge_docs=knowledge_docs,
         is_annual=is_annual,
-        modules=modules
+        modules=modules,
+        token_rate_10k=token_rate,
+        annual_discount_percent=annual_discount
     )
     return quote
 

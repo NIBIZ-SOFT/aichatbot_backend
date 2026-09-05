@@ -1,5 +1,5 @@
 import uuid
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, model_validator
 from app.models.all_models import (
@@ -23,9 +23,11 @@ class TenantProvisionRequest(BaseModel):
     admin_name: str
     admin_email: str
     password: str
-    subscription_tier: SubscriptionTier = SubscriptionTier.STARTER
+    subscription_tier: Union[SubscriptionTier, str] = "starter"
     billing_cycle: str = "monthly"
     business_category: Optional[str] = "ecommerce"  # "ecommerce" | "erp" | "services"
+    custom_config: Optional[Dict[str, Any]] = None
+
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -350,6 +352,7 @@ class PlanChangeRequest(BaseModel):
     tier: str
     billing_cycle: Optional[str] = "monthly"
     payment_method: Optional[str] = "bKash Direct Merchant"
+    custom_config: Optional[Dict[str, Any]] = None
 
 class SubscriptionDetailsOut(BaseModel):
     id: uuid.UUID

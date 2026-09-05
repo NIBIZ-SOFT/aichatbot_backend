@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
 from app.models.all_models import User, Tenant, Subscription, SubscriptionTier, SubscriptionStatus, UserRole, Website, AIAssistant
 from app.schemas.schemas import UserRegister, UserLogin, TokenResponse, UserOut, TenantProvisionRequest
+from app.services.billing.pricing_service import PricingService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 security = HTTPBearer()
@@ -164,12 +165,57 @@ async def provision_new_tenant(payload: TenantProvisionRequest, db: AsyncSession
         }
         assistant_instruction = f"You are {payload.organization_name}'s smart E-Commerce Shopping Assistant. Help customers find products, select sizes, track delivery, and place orders via bKash COD."
 
+    tier_raw = payload.subscription_tier.value if hasattr(payload.subscription_tier, "value") else str(payload.subscription_tier)
+    tier_str = tier_raw.lower()
+
+    is_custom = (tier_str == "custom" or payload.custom_config is not None)
+    tier_map = {
+        "free": SubscriptionTier.FREE,
+        "starter": SubscriptionTier.STARTER,
+        "growth": SubscriptionTier.GROWTH,
+        "enterprise": SubscriptionTier.ENTERPRISE
+    }
+
+    if is_custom:
+        cfg = payload.custom_config or {}
+        token_limit = int(cfg.get("tokens", 1_000_000))
+        max_agents = int(cfg.get("seats", 2))
+        max_websites = int(cfg.get("websites", 1))
+        max_knowledge_docs = int(cfg.get("knowledge_docs", 50))
+        tier_enum = SubscriptionTier.GROWTH
+        locked_price = float(cfg.get("price") or cfg.get("monthlyPrice") or 3340.0)
+        deal_notes = f"Custom Builder Provisioning: {token_limit:,} tokens, {max_agents} seats, {max_websites} sites (৳{locked_price:,.2f})"
+    else:
+        # Load from DB if plan code exists
+        db_plan = await PricingService.get_plan_by_code(db, tier_str)
+        if db_plan:
+            token_limit = db_plan.monthly_token_limit
+            max_agents = db_plan.max_agents
+            max_websites = db_plan.max_websites
+            max_knowledge_docs = db_plan.max_knowledge_docs
+            tier_enum = tier_map.get(tier_str, SubscriptionTier.STARTER)
+        else:
+            tier_configs = {
+                "free": {"tokens": 50_000, "agents": 1, "websites": 1, "docs": 5},
+                "starter": {"tokens": 500_000, "agents": 2, "websites": 1, "docs": 10},
+                "growth": {"tokens": 2_500_000, "agents": 10, "websites": 5, "docs": 50},
+                "enterprise": {"tokens": 10_000_000, "agents": 25, "websites": 20, "docs": 200}
+            }
+            conf = tier_configs.get(tier_str, tier_configs["starter"])
+            token_limit = conf["tokens"]
+            max_agents = conf["agents"]
+            max_websites = conf["websites"]
+            max_knowledge_docs = conf.get("docs", 10)
+            tier_enum = tier_map.get(tier_str, SubscriptionTier.STARTER)
+        locked_price = 0.0
+        deal_notes = None
+
     tenant = Tenant(
         name=payload.organization_name,
         slug=slug,
         business_category=category,
         is_active=True,
-        whitelabel_enabled=(payload.subscription_tier == SubscriptionTier.ENTERPRISE),
+        whitelabel_enabled=(tier_str == "enterprise" or (is_custom and max_websites >= 5)),
         branding_config={"brand_name": payload.organization_name, "primary_color": "#4F46E5"},
         enabled_modules=enabled_modules
     )
@@ -177,22 +223,21 @@ async def provision_new_tenant(payload: TenantProvisionRequest, db: AsyncSession
     await db.flush()
 
     # 3. Provision Subscription Tier with exact quotas
-    tier_configs = {
-        SubscriptionTier.FREE: {"tokens": 50_000, "agents": 1, "websites": 1},
-        SubscriptionTier.STARTER: {"tokens": 500_000, "agents": 2, "websites": 1},
-        SubscriptionTier.GROWTH: {"tokens": 2_500_000, "agents": 10, "websites": 5},
-        SubscriptionTier.ENTERPRISE: {"tokens": 10_000_000, "agents": 25, "websites": 20}
-    }
-    config = tier_configs.get(payload.subscription_tier, tier_configs[SubscriptionTier.STARTER])
-
     sub = Subscription(
         tenant_id=tenant.id,
-        tier=payload.subscription_tier,
+        tier=tier_enum,
+        plan_code="custom" if is_custom else tier_str,
         status=SubscriptionStatus.ACTIVE,
-        monthly_token_limit=config["tokens"],
-        max_agents=config["agents"],
-        max_websites=config["websites"],
-        monthly_conversation_limit=1000
+        billing_cycle=payload.billing_cycle,
+        monthly_token_limit=token_limit,
+        max_agents=max_agents,
+        max_websites=max_websites,
+        max_knowledge_docs=max_knowledge_docs,
+        monthly_conversation_limit=max(500, int(token_limit / 1000)),
+        is_custom_deal=is_custom,
+        locked_price_bdt=locked_price,
+        locked_token_limit=token_limit,
+        deal_notes=deal_notes
     )
     db.add(sub)
 
