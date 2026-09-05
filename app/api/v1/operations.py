@@ -8,9 +8,10 @@ from sqlalchemy import select, func, desc
 from app.core.database import get_db
 from app.api.v1.auth import get_current_user
 from app.models.all_models import (
-    User, Tenant, Subscription, UsageRecord, Conversation, 
-    Message, Contact, Website, ApiKey, Webhook, Notification, AuditLog,
-    ConversationStatus, UserRole, SenderType
+    User, Tenant, Subscription, SubscriptionTier, SubscriptionStatus,
+    UsageRecord, Conversation, Message, Contact, Website, ApiKey, Webhook,
+    Notification, AuditLog, ConversationStatus, UserRole, SenderType,
+    WalletTransaction, WalletTransactionType
 )
 from app.schemas.schemas import (
     DashboardStatsOut, AnalyticsTrendPoint, SubscriptionOut, 
@@ -484,7 +485,6 @@ async def change_subscription_plan(
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant organization not found")
 
-    from app.models.all_models import SubscriptionTier, SubscriptionStatus
     target_tier_str = payload.tier.lower()
     
     tier_map = {
