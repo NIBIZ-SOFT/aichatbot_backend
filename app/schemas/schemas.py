@@ -79,6 +79,7 @@ class TenantOut(BaseModel):
     name: str
     slug: str
     custom_domain: Optional[str] = None
+    business_category: Optional[str] = "ecommerce"
     whitelabel_enabled: bool = False
     branding_config: Dict[str, Any] = {}
     created_at: datetime
@@ -88,6 +89,7 @@ class TenantOut(BaseModel):
 class TenantSettingsUpdate(BaseModel):
     name: Optional[str] = None
     custom_domain: Optional[str] = None
+    business_category: Optional[str] = None
     branding_config: Optional[Dict[str, Any]] = None
     whitelabel_enabled: Optional[bool] = None
 

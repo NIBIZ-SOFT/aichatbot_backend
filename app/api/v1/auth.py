@@ -146,6 +146,7 @@ async def provision_new_tenant(payload: TenantProvisionRequest, db: AsyncSession
             "team": True, "settings": True, "subscription": True
         }
         assistant_instruction = f"You are the official Enterprise AI Assistant for {payload.organization_name}. You specialize in enterprise business support, SLA tickets, customer inquiries, meeting scheduling, and corporate knowledge documentation."
+        default_welcome = f"Welcome to {payload.organization_name}. How can we assist with enterprise support, SLA inquiries, or meeting scheduling today?"
     elif category == "services":
         enabled_modules = {
             "dashboard": True, "inbox": True, "contacts": True,
@@ -154,6 +155,7 @@ async def provision_new_tenant(payload: TenantProvisionRequest, db: AsyncSession
             "team": True, "settings": True, "subscription": True
         }
         assistant_instruction = f"You are the official Consulting & Service AI Assistant for {payload.organization_name}. Assist clients with consultation bookings, service inquiries, and project FAQs."
+        default_welcome = f"Hello! Welcome to {payload.organization_name}. How can we assist with your consultation or service booking today?"
     else:
         # Default E-Commerce
         category = "ecommerce"
@@ -164,6 +166,7 @@ async def provision_new_tenant(payload: TenantProvisionRequest, db: AsyncSession
             "team": True, "settings": True, "subscription": True
         }
         assistant_instruction = f"You are {payload.organization_name}'s smart E-Commerce Shopping Assistant. Help customers find products, select sizes, track delivery, and place orders via bKash COD."
+        default_welcome = f"Hello! Welcome to {payload.organization_name}. Need help finding products, checking prices, or placing an order?"
 
     tier_raw = payload.subscription_tier.value if hasattr(payload.subscription_tier, "value") else str(payload.subscription_tier)
     tier_str = tier_raw.lower()
@@ -276,22 +279,29 @@ async def provision_new_tenant(payload: TenantProvisionRequest, db: AsyncSession
     clean_domain = raw_domain if raw_domain else f"{slug}.com"
 
     widget_key = f"wgt_{uuid.uuid4().hex[:18]}"
+    site_name = f"{payload.organization_name} Storefront" if category == "ecommerce" else (f"{payload.organization_name} Services" if category == "services" else f"{payload.organization_name} Portal")
     website = Website(
         tenant_id=tenant.id,
         assistant_id=assistant.id,
         widget_key=widget_key,
-        name=f"{payload.organization_name} Storefront" if category == "ecommerce" else f"{payload.organization_name} Portal",
+        name=site_name,
         domain=clean_domain,
         header_title=f"{payload.organization_name} Live AI",
-        welcome_message=f"Hello! Welcome to {payload.organization_name}. How can we assist you today?",
+        welcome_message=default_welcome,
         primary_color="#4F46E5",
         business_category=category,
         ecommerce_config={
-            "show_products_carousel": True,
-            "allow_instant_checkout": True,
-            "cod_enabled": True,
+            "enabled": (category == "ecommerce"),
+            "show_products_carousel": (category == "ecommerce"),
+            "allow_instant_checkout": (category == "ecommerce"),
+            "cod_enabled": (category == "ecommerce"),
             "bkash_enabled": True,
             "eps_enabled": True,
+            "lead_capture_enabled": True,
+            "booking_enabled": (category in ["services", "erp"]),
+            "whatsapp_connect_enabled": True,
+            "service_catalog_enabled": (category == "services"),
+            "sla_tickets_enabled": (category == "erp"),
             "delivery_charge_inside_dhaka": 60,
             "delivery_charge_outside_dhaka": 120
         }

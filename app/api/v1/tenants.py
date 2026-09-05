@@ -56,6 +56,18 @@ async def update_tenant_settings(
         tenant.name = payload.name
     if payload.custom_domain is not None:
         tenant.custom_domain = payload.custom_domain
+    if payload.business_category is not None:
+        cat = payload.business_category.lower()
+        tenant.business_category = cat
+        mods = dict(tenant.enabled_modules or {})
+        if cat in ["services", "erp"]:
+            mods["products"] = False
+            mods["orders"] = False
+        else:
+            mods["products"] = True
+            mods["orders"] = True
+        tenant.enabled_modules = mods
+        flag_modified(tenant, "enabled_modules")
     if payload.whitelabel_enabled is not None:
         tenant.whitelabel_enabled = payload.whitelabel_enabled
     if payload.branding_config is not None:
@@ -445,7 +457,28 @@ async def update_widget(
     if payload.position is not None:
         site.position = payload.position
     if payload.business_category is not None:
-        site.business_category = payload.business_category
+        from sqlalchemy.orm.attributes import flag_modified
+        cat = payload.business_category.lower()
+        site.business_category = cat
+        cur_ecom = dict(site.ecommerce_config or {})
+        cur_ecom["enabled"] = (cat == "ecommerce")
+        site.ecommerce_config = cur_ecom
+        flag_modified(site, "ecommerce_config")
+
+        if user.tenant_id and site.tenant_id == user.tenant_id:
+            t_res = await db.execute(select(Tenant).where(Tenant.id == user.tenant_id))
+            t_obj = t_res.scalars().first()
+            if t_obj:
+                t_obj.business_category = cat
+                mods = dict(t_obj.enabled_modules or {})
+                if cat in ["services", "erp"]:
+                    mods["products"] = False
+                    mods["orders"] = False
+                else:
+                    mods["products"] = True
+                    mods["orders"] = True
+                t_obj.enabled_modules = mods
+                flag_modified(t_obj, "enabled_modules")
     if payload.ecommerce_config is not None:
         from sqlalchemy.orm.attributes import flag_modified
         cur_ecom = dict(site.ecommerce_config or {})
