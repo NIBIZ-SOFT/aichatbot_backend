@@ -186,6 +186,105 @@ async def ensure_platform_live_support_widget(db: AsyncSession) -> Optional[Webs
         await db.rollback()
         return None
 
+def resolve_dynamic_widget_chips(widget: Website, tenant: Optional[Tenant], category: str) -> List[Dict[str, Any]]:
+    """
+    Scalable, dynamic chip generator for Live CDN Chat Widget.
+    Strictly checks the website's Customizer configuration (widget.ecommerce_config).
+    Only returns quick action chips that are explicitly enabled by the tenant!
+    """
+    is_platform_master = (
+        widget.widget_key == "wgt_platform_live_support" or
+        (tenant and getattr(tenant, "slug", "") in ["platform", "platform-support"])
+    )
+
+    # 1. Super Admin Official Live Support Widget
+    if is_platform_master:
+        return [
+            {"text": "🚀 Pricing & Plans", "query": "Jobab Chat এর প্যাকেজ ও প্রাইসিং সম্পর্কে বিস্তারিত জানতে চাই"},
+            {"text": "⚡ Book Free Demo", "query": "আমাদের ব্যবসার জন্য Jobab Chat এর একটি লাইভ ডেমো দেখতে চাই"},
+            {"text": "🧩 AI & Integrations", "query": "Jobab Chat এর AI ফিচার ও ওয়েবসাইট ইন্টিগ্রেশন কিভাবে কাজ করে?"},
+            {"text": "👤 Talk to Human Agent", "action": "handover"}
+        ]
+
+    cfg = widget.ecommerce_config or {}
+    company_name = (tenant.name if tenant else None) or widget.name or "আমাদের"
+    cat = (category or "ecommerce").lower()
+    chips: List[Dict[str, Any]] = []
+
+    # 2. Category-Specific Dynamic Chips (Strictly Enforces Enabled Customizer Flags)
+    if cat == "services":
+        # Services & Booking Customizer
+        if cfg.get("booking_enabled"):
+            chips.append({
+                "text": "📅 Book Consultation",
+                "query": f"আমি {company_name} এর সাথে একটি কনসালটেশন শিডিউল করতে চাই"
+            })
+        if cfg.get("service_catalog_enabled"):
+            chips.append({
+                "text": "💼 Our Services",
+                "query": f"{company_name} এর সার্ভিস ও প্যাকেজ সম্পর্কে জানতে চাই"
+            })
+        if cfg.get("whatsapp_connect_enabled"):
+            chips.append({
+                "text": "👤 Talk to Consultant",
+                "action": "handover"
+            })
+
+    elif cat == "erp":
+        # ERP / B2B Customizer
+        if cfg.get("demo_scheduler_enabled"):
+            chips.append({
+                "text": "📅 Book Live Demo",
+                "query": f"{company_name} এর সিস্টেমের একটি লাইভ ডেমো দেখতে চাই"
+            })
+        if cfg.get("sla_tickets_enabled"):
+            chips.append({
+                "text": "🎫 Open SLA Ticket",
+                "query": "জরুরি সাপোর্ট টিকেট তৈরি করতে চাই"
+            })
+        if cfg.get("dedicated_manager_enabled"):
+            chips.append({
+                "text": "👤 Talk to Specialist",
+                "action": "handover"
+            })
+
+    elif cat == "ecommerce":
+        # E-Commerce Customizer
+        if cfg.get("show_products_carousel", True):
+            chips.append({
+                "text": "🛍️ Browse Products",
+                "action": "browse"
+            })
+        if cfg.get("allow_instant_checkout", True):
+            chips.append({
+                "text": "📦 Track Order",
+                "query": "আমার অর্ডার ট্র্যাক করতে চাই"
+            })
+        chips.append({
+            "text": "👤 Support Agent",
+            "action": "handover"
+        })
+
+    else:
+        # Extensible fallback for future custom categories (e.g. healthcare, real_estate, education)
+        if cfg.get("booking_enabled") or cfg.get("appointment_enabled"):
+            chips.append({
+                "text": "📅 Book Appointment",
+                "query": f"আমি {company_name} এর সাথে একটি অ্যাপয়েন্টমেন্ট বুক করতে চাই"
+            })
+        if cfg.get("catalog_enabled") or cfg.get("service_catalog_enabled"):
+            chips.append({
+                "text": "📋 Catalog & Details",
+                "query": f"{company_name} এর সার্ভিস ও অফার সম্পর্কে জানতে চাই"
+            })
+        if cfg.get("handover_enabled", True):
+            chips.append({
+                "text": "👤 Talk to Agent",
+                "action": "handover"
+            })
+
+    return chips
+
 # ----------------- PUBLIC WIDGET APIS (LAYER 3) -----------------
 @router.post("/public/widget/init")
 async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Depends(get_db)):
@@ -316,10 +415,10 @@ async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Dep
 
     # Fetch tenant ecommerce settings
     tenant = await db.get(Tenant, widget.tenant_id)
-    tenant_category = (tenant.business_category or widget.business_category or "ecommerce").lower() if tenant else "ecommerce"
+    store_category = (widget.business_category or (tenant.business_category if tenant else None) or "ecommerce").lower()
     t_ecom = tenant.ecommerce_settings if tenant and tenant.ecommerce_settings else {}
 
-    is_ecommerce = (tenant_category == "ecommerce")
+    is_ecommerce = (store_category == "ecommerce")
 
     # Merge website-level overrides with tenant defaults
     w_ecom = widget.ecommerce_config or {}
@@ -338,6 +437,8 @@ async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Dep
         "delivery_charge_outside_dhaka": float(w_ecom.get("delivery_charge_outside_dhaka", t_ecom.get("delivery_charge_outside_dhaka", 120.0)))
     }
 
+    dynamic_chips = resolve_dynamic_widget_chips(widget, tenant, store_category)
+
     return {
         "conversation_id": conversation.id,
         "visitor_session_id": session_id,
@@ -347,8 +448,10 @@ async def init_widget_session(payload: WidgetInitSession, db: AsyncSession = Dep
             "welcome_message": widget.welcome_message,
             "primary_color": widget.primary_color,
             "position": widget.position,
-            "business_category": tenant_category,
+            "business_category": store_category,
             "ecommerce": merged_ecommerce,
+            "config": w_ecom,
+            "chips": dynamic_chips,
             "branding": widget.branding_config or {}
         },
         "messages": existing_messages
@@ -646,14 +749,20 @@ async def public_send_message(payload: WidgetMessageSend, db: AsyncSession = Dep
             safety_settings=assistant.safety_settings
         )
 
-        # Choose adaptive tools based on tenant archetype (E-Commerce vs ERP vs SaaS)
-        tenant_cat = (tenant.business_category or "ecommerce").lower() if tenant else "ecommerce"
-        if tenant_cat in ["saas", "platform"]:
+        # Choose adaptive tools based on tenant archetype (Strict Multi-Tenant Isolation)
+        is_platform_master = (
+            widget.widget_key == "wgt_platform_live_support" or
+            (tenant and getattr(tenant, "slug", "") in ["platform", "platform-support"])
+        )
+        store_cat = (widget.business_category or (tenant.business_category if tenant else None) or "ecommerce").lower()
+        if is_platform_master:
             active_tools = SAAS_TOOLS + ERP_TOOLS
-        elif tenant_cat in ["erp", "services"]:
-            active_tools = ERP_TOOLS + SAAS_TOOLS
+        elif store_cat in ["erp", "services"]:
+            active_tools = ERP_TOOLS
+        elif store_cat == "ecommerce":
+            active_tools = COMMERCE_TOOLS
         else:
-            active_tools = COMMERCE_TOOLS + SAAS_TOOLS
+            active_tools = []
 
         try:
             ai_res = await gemini.generate_chat_response(

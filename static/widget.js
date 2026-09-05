@@ -1312,6 +1312,7 @@
     var isEcomEnabled = false;
     var currentBusinessCategory = "ecommerce";
     var currentEcomConfig = null;
+    var currentWidgetChips = [];
 
     function updatePaymentMethodOptions(ecom) {
       if (!chkPayment) return;
@@ -1356,42 +1357,24 @@
       }
     }
 
-    function renderAdaptiveChips(category, isEcom) {
+    function renderAdaptiveChips(category, isEcom, serverChips) {
       if (!chipsBox) return;
       chipsBox.innerHTML = "";
 
       var chips = [];
-      var cat = (category || "").toLowerCase();
-
-      if (cat === "saas" || cat === "platform" || cat === "software" || !isEcom) {
-        // SaaS / Platform / Lead Generation & Live Support (e.g. Jobab Chat)
-        chips = [
-          { text: "🚀 Pricing & Plans", query: "Jobab Chat এর প্যাকেজ ও প্রাইসিং সম্পর্কে বিস্তারিত জানতে চাই" },
-          { text: "⚡ Book Free Demo", query: "আমাদের ব্যবসার জন্য Jobab Chat এর একটি লাইভ ডেমো দেখতে চাই" },
-          { text: "🧩 AI & Integrations", query: "Jobab Chat এর AI ফিচার ও ওয়েবসাইট ইন্টিগ্রেশন কিভাবে কাজ করে?" },
-          { text: "👤 Talk to Human Agent", action: "handover" }
-        ];
-      } else if (cat === "erp") {
-        chips = [
-          { text: "📅 Book Live Demo", query: "আমাদের ফ্যাক্টরির জন্য একটি লাইভ ডেমো শিডিউল করতে চাই" },
-          { text: "🎫 Open SLA Ticket", query: "আমাদের ব্যাংক রিকনসিলিয়েশন ও Mushak 6.3 ভ্যাটে এরর আসছে, আর্জেন্ট সাপোর্ট টিকেট দরকার" },
-          { text: "💰 Pricing & Plans", query: "Apex ERP এর মাসিক প্রাইসিং কত এবং কি কি প্যাকেজ আছে?" },
-          { text: "👤 Talk to Specialist", action: "handover" }
-        ];
-      } else if (cat === "services") {
-        chips = [
-          { text: "📅 Book Consultation", query: "আমি একটি কনসালটেশন শিডিউল করতে চাই" },
-          { text: "💼 Our Services", query: "আপনাদের সার্ভিস ও প্যাকেজ সম্পর্কে জানতে চাই" },
-          { text: "👤 Talk to Consultant", action: "handover" }
-        ];
-      } else if (isEcom) {
-        // E-Commerce Retail Store Selling Physical Goods
-        chips = [
-          { text: "🛍️ Browse Products", action: "browse" },
-          { text: "📦 Track Order", query: "আমার অর্ডার ট্র্যাক করতে চাই" },
-          { text: "👤 Support Agent", action: "handover" }
-        ];
+      if (Array.isArray(serverChips)) {
+        chips = serverChips;
+        currentWidgetChips = serverChips;
+      } else if (Array.isArray(currentWidgetChips) && currentWidgetChips.length > 0) {
+        chips = currentWidgetChips;
       }
+
+      if (!chips || chips.length === 0) {
+        chipsBox.style.display = "none";
+        return;
+      }
+
+      chipsBox.style.display = "flex";
 
       chips.forEach(function (c) {
         var btn = document.createElement("button");
@@ -1743,7 +1726,7 @@
       if (isEcomEnabled) {
         loadCart();
       }
-      renderAdaptiveChips(currentBusinessCategory, isEcomEnabled);
+      renderAdaptiveChips(currentBusinessCategory, isEcomEnabled, currentWidgetChips);
       initSession();
     });
 
@@ -2015,7 +1998,7 @@
       headerBar.style.padding = "2px 2px";
       headerBar.innerHTML = `
         <span style="font-size:11.5px;font-weight:800;color:#0F172A;display:flex;align-items:center;gap:4px;">
-          🚀 <b>Jobab Chat Subscription Plans</b>
+          🚀 <b>${(data && data.title) ? data.title : "Subscription Plans"}</b>
         </span>
         <span style="font-size:10px;color:#059669;background:#ECFDF5;border:1px solid #A7F3D0;padding:2px 6px;border-radius:10px;font-weight:700;">
           Up to 25% OFF
@@ -2829,7 +2812,8 @@
           }
 
           // Adaptive Quick Action Chips
-          renderAdaptiveChips(currentBusinessCategory, isEcomEnabled);
+          currentWidgetChips = Array.isArray(data.widget.chips) ? data.widget.chips : [];
+          renderAdaptiveChips(currentBusinessCategory, isEcomEnabled, currentWidgetChips);
 
           // Visitor Cart Initializer
           if (isEcomEnabled) {
