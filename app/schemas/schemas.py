@@ -26,6 +26,7 @@ class TenantProvisionRequest(BaseModel):
     subscription_tier: Union[SubscriptionTier, str] = "starter"
     billing_cycle: str = "monthly"
     business_category: Optional[str] = "ecommerce"  # "ecommerce" | "erp" | "services"
+    website_domain: Optional[str] = None
     custom_config: Optional[Dict[str, Any]] = None
 
 
