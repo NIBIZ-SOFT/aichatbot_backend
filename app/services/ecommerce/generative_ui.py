@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, case, desc, or_, cast, String
 
-from app.models.all_models import Product, Order
+from app.models.all_models import Product, Order, Tenant
 
 
 class GenerativeUIService:
@@ -274,6 +274,12 @@ class GenerativeUIService:
             }
 
         elif tool_name in ["show_pricing_plans", "show_packages", "get_pricing_plans"]:
+            # Only return official Jobab Chat SaaS subscription deck if this is the Platform Tenant
+            tenant_res = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+            tenant_obj = tenant_res.scalars().first()
+            if not tenant_obj or tenant_obj.slug not in ["platform", "platform-support"]:
+                return None
+
             from app.models.all_models import PricingPlan
             plans_res = await db.execute(
                 select(PricingPlan).where(PricingPlan.is_active == True).order_by(PricingPlan.display_order)
@@ -372,23 +378,26 @@ class GenerativeUIService:
             if comp:
                 return comp
 
-        # Pricing / Packages Fallback
+        # Pricing / Packages Fallback (Strictly Platform Super Admin Support only)
         PRICING_PHRASES = [
             "package", "packages", "pricing", "plans", "plan", "subscription", "starter", "growth",
             "enterprise", "দাম কত", "খরচ কত", "প্যাকেজ", "প্ল্যান", "ফিচার", "রেট", "মূল্য", "সাবস্ক্রিপশন"
         ]
         has_pricing = any(pp in clean_q for pp in PRICING_PHRASES)
         if has_pricing:
-            comp = await cls.resolve_from_tool_call(
-                db=db,
-                tenant_id=tenant_id,
-                tool_name="show_pricing_plans",
-                tool_args={},
-                conversation_id=conversation_id,
-                visitor_phone=visitor_phone
-            )
-            if comp:
-                return comp
+            tenant_res = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
+            tenant_obj = tenant_res.scalars().first()
+            if tenant_obj and tenant_obj.slug in ["platform", "platform-support"]:
+                comp = await cls.resolve_from_tool_call(
+                    db=db,
+                    tenant_id=tenant_id,
+                    tool_name="show_pricing_plans",
+                    tool_args={},
+                    conversation_id=conversation_id,
+                    visitor_phone=visitor_phone
+                )
+                if comp:
+                    return comp
 
         # Direct SQL Product Match Fallback
         if clean_q and len(clean_q) > 3:
