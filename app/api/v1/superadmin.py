@@ -1362,7 +1362,9 @@ class ThemeConfigPayload(BaseModel):
     favicon_url: Optional[str] = ""
     widget_avatar_url: Optional[str] = ""
     footer_text: Optional[str] = "© 2026 Jobab Chat Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI"
-    support_email: Optional[str] = "support@enterprise.example"
+    support_email: Optional[str] = "support@jobab.chat"
+    support_phone: Optional[str] = "+880 1837-586105"
+    company_address: Optional[str] = "Level 8, Motijheel Commercial Area, Dhaka-1000, Bangladesh"
     primary_color: str = "#2563EB"
     primary_hover: str = "#1D4ED8"
     dark_surface: str = "#0B0F19"
@@ -1380,13 +1382,15 @@ async def get_public_platform_theme(db: AsyncSession = Depends(get_db)):
     
     default_config = {
         **THEME_PRESETS[0],
-        "platform_name": "Jobab Chat",
-        "platform_tagline": "Autonomous Customer Communication & Sales Cloud",
+        "platform_name": "Jobab Chat Enterprise Platform",
+        "platform_tagline": "Autonomous AI Customer Support & Chat Provider",
         "logo_url": "https://iili.io/CsuMe3l.png",
         "favicon_url": "https://iili.io/CsuMe3l.png",
         "widget_avatar_url": "",
         "footer_text": "© 2026 Jobab Chat Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI",
-        "support_email": "support@enterprise.example"
+        "support_email": "support@jobab.chat",
+        "support_phone": "+880 1837-586105",
+        "company_address": "Level 8, Motijheel Commercial Area, Dhaka-1000, Bangladesh",
     }
     
     current_config = {**default_config, **(setting.value_json if setting else {})}
@@ -1408,13 +1412,15 @@ async def get_superadmin_theme(
     
     default_config = {
         **THEME_PRESETS[0],
-        "platform_name": "Jobab Chat",
-        "platform_tagline": "Autonomous Customer Communication & Sales Cloud",
+        "platform_name": "Jobab Chat Enterprise Platform",
+        "platform_tagline": "Autonomous AI Customer Support & Chat Provider",
         "logo_url": "https://iili.io/CsuMe3l.png",
         "favicon_url": "https://iili.io/CsuMe3l.png",
         "widget_avatar_url": "",
         "footer_text": "© 2026 Jobab Chat Platform • Multi-Tenant PostgreSQL 18 & Enterprise Neural AI",
-        "support_email": "support@enterprise.example"
+        "support_email": "support@jobab.chat",
+        "support_phone": "+880 1837-586105",
+        "company_address": "Level 8, Motijheel Commercial Area, Dhaka-1000, Bangladesh",
     }
     
     current_config = {**default_config, **(setting.value_json if setting else {})}
