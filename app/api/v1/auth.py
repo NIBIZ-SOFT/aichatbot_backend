@@ -269,16 +269,32 @@ async def provision_new_tenant(payload: TenantProvisionRequest, db: AsyncSession
     await db.flush()
 
     # 6. Provision Default Live Chat Widget
+    raw_domain = (payload.website_domain or "").strip().lower()
+    if "://" in raw_domain:
+        raw_domain = raw_domain.split("://", 1)[1]
+    raw_domain = raw_domain.split("/", 1)[0].split("?", 1)[0].split(":", 1)[0].strip()
+    clean_domain = raw_domain if raw_domain else f"{slug}.com"
+
     widget_key = f"wgt_{uuid.uuid4().hex[:18]}"
     website = Website(
         tenant_id=tenant.id,
         assistant_id=assistant.id,
         widget_key=widget_key,
-        name=f"{payload.organization_name} Main Portal",
-        domain=f"{slug}.example.com",
+        name=f"{payload.organization_name} Storefront" if category == "ecommerce" else f"{payload.organization_name} Portal",
+        domain=clean_domain,
         header_title=f"{payload.organization_name} Live AI",
-        welcome_message="Hello! How can we assist your business today?",
-        primary_color="#4F46E5"
+        welcome_message=f"Hello! Welcome to {payload.organization_name}. How can we assist you today?",
+        primary_color="#4F46E5",
+        business_category=category,
+        ecommerce_config={
+            "show_products_carousel": True,
+            "allow_instant_checkout": True,
+            "cod_enabled": True,
+            "bkash_enabled": True,
+            "eps_enabled": True,
+            "delivery_charge_inside_dhaka": 60,
+            "delivery_charge_outside_dhaka": 120
+        }
     )
     db.add(website)
 
