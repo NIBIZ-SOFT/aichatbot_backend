@@ -93,6 +93,7 @@ class BkashCreatePaymentRequest(BaseModel):
     phone_number: Optional[str] = "01770618575"
     coupon_code: Optional[str] = None
     frontend_url: Optional[str] = None
+    custom_config: Optional[Dict[str, Any]] = None
 
 class BkashExecutePaymentRequest(BaseModel):
     payment_id: str
@@ -100,6 +101,7 @@ class BkashExecutePaymentRequest(BaseModel):
     billing_cycle: Optional[str] = "monthly"
     coupon_code: Optional[str] = None
     payer_email: Optional[str] = None
+    custom_config: Optional[Dict[str, Any]] = None
 
 @router.post("/bkash/create")
 async def create_bkash_checkout_session(
@@ -119,19 +121,43 @@ async def create_bkash_checkout_session(
 
     tier_str = payload.tier.lower()
     
-    # Load dynamic plan from database
-    plan = await PricingService.get_plan_by_code(db, tier_str)
-    if not plan:
-        # Fallback to default pricing map if plan not found in DB
-        fallback_monthly = {"free": 0.0, "starter": 4990.0, "growth": 19990.0, "enterprise": 49990.0}
-        fallback_annual = {"free": 0.0, "starter": 4240.0 * 12, "growth": 16990.0 * 12, "enterprise": 42490.0 * 12}
-        if tier_str not in fallback_monthly:
-            raise HTTPException(status_code=400, detail="Invalid subscription tier selected")
+    if tier_str == "custom":
+        from app.services.billing.wallet_service import WalletService
+        cfg = payload.custom_config or {}
+        tokens = int(cfg.get("tokens", 1_000_000))
+        seats = int(cfg.get("seats", 2))
+        websites = int(cfg.get("websites", 1))
         is_annual = payload.billing_cycle == "annual"
-        raw_amount = fallback_annual[tier_str] if is_annual else fallback_monthly[tier_str]
+        token_rate = float(engine_cfg.get("default_per_10k_tokens_rate_bdt", 1.50))
+        annual_discount = float(engine_cfg.get("annual_discount_percentage", 15.0))
+        quote = WalletService.calculate_custom_quote(
+            tokens=tokens,
+            seats=seats,
+            websites=websites,
+            is_annual=is_annual,
+            token_rate_10k=token_rate,
+            annual_discount_percent=annual_discount
+        )
+        if cfg.get("price") is not None:
+            raw_amount = float(cfg["price"])
+        elif is_annual:
+            raw_amount = quote["annual_price_bdt"] * 12.0
+        else:
+            raw_amount = quote["monthly_price_bdt"]
     else:
-        is_annual = payload.billing_cycle == "annual"
-        raw_amount = plan.annual_price_bdt * 12 if is_annual else plan.monthly_price_bdt
+        # Load dynamic plan from database
+        plan = await PricingService.get_plan_by_code(db, tier_str)
+        if not plan:
+            # Fallback to default pricing map if plan not found in DB
+            fallback_monthly = {"free": 0.0, "starter": 4990.0, "growth": 19990.0, "enterprise": 49990.0}
+            fallback_annual = {"free": 0.0, "starter": 4240.0 * 12, "growth": 16990.0 * 12, "enterprise": 42490.0 * 12}
+            if tier_str not in fallback_monthly:
+                raise HTTPException(status_code=400, detail="Invalid subscription tier selected")
+            is_annual = payload.billing_cycle == "annual"
+            raw_amount = fallback_annual[tier_str] if is_annual else fallback_monthly[tier_str]
+        else:
+            is_annual = payload.billing_cycle == "annual"
+            raw_amount = plan.annual_price_bdt * 12 if is_annual else plan.monthly_price_bdt
 
     discount_amount = 0.0
     coupon_info = None
@@ -196,36 +222,52 @@ async def execute_bkash_payment(
     """
     target_tier_str = payload.tier.lower()
     
-    # 1. Fetch exact plan from database (supports standard + custom dynamic plans)
-    plan = await PricingService.get_plan_by_code(db, target_tier_str)
-    
     tier_map = {
         "free": SubscriptionTier.FREE,
         "starter": SubscriptionTier.STARTER,
         "growth": SubscriptionTier.GROWTH,
         "enterprise": SubscriptionTier.ENTERPRISE
     }
-    
-    if plan:
-        token_limit = plan.monthly_token_limit
-        max_agents = plan.max_agents
-        max_websites = plan.max_websites
-        max_knowledge_docs = plan.max_knowledge_docs
-        max_conversations = plan.monthly_conversation_limit
-        tier_enum = tier_map.get(target_tier_str, SubscriptionTier.GROWTH)
+
+    is_custom_deal = False
+    locked_price = 0.0
+    deal_notes = None
+
+    if target_tier_str == "custom" or payload.custom_config is not None:
+        cfg = payload.custom_config or {}
+        token_limit = int(cfg.get("tokens", 1_000_000))
+        max_agents = int(cfg.get("seats", 2))
+        max_websites = int(cfg.get("websites", 1))
+        max_knowledge_docs = int(cfg.get("knowledge_docs", 50))
+        max_conversations = max(500, int(token_limit / 1000))
+        tier_enum = SubscriptionTier.GROWTH
+        is_custom_deal = True
+        locked_price = float(cfg.get("price") or 3340.0)
+        deal_notes = f"Custom Builder Deploy: {token_limit:,} tokens, {max_agents} seats, {max_websites} sites (৳{locked_price:,.2f})"
+        plan = None
     else:
-        tier_limits = {
-            "free": 50_000,
-            "starter": 500_000,
-            "growth": 2_500_000,
-            "enterprise": 10_000_000
-        }
-        token_limit = tier_limits.get(target_tier_str, 500_000)
-        tier_enum = tier_map.get(target_tier_str, SubscriptionTier.STARTER)
-        max_agents = 2
-        max_websites = 1
-        max_knowledge_docs = 10
-        max_conversations = 200
+        # 1. Fetch exact plan from database (supports standard + custom dynamic plans)
+        plan = await PricingService.get_plan_by_code(db, target_tier_str)
+        if plan:
+            token_limit = plan.monthly_token_limit
+            max_agents = plan.max_agents
+            max_websites = plan.max_websites
+            max_knowledge_docs = plan.max_knowledge_docs
+            max_conversations = plan.monthly_conversation_limit
+            tier_enum = tier_map.get(target_tier_str, SubscriptionTier.GROWTH)
+        else:
+            tier_limits = {
+                "free": 50_000,
+                "starter": 500_000,
+                "growth": 2_500_000,
+                "enterprise": 10_000_000
+            }
+            token_limit = tier_limits.get(target_tier_str, 500_000)
+            tier_enum = tier_map.get(target_tier_str, SubscriptionTier.STARTER)
+            max_agents = 2
+            max_websites = 1
+            max_knowledge_docs = 10
+            max_conversations = 200
 
     # 2. Execute & capture with bKash
     platform_bkash = await get_platform_bkash_service(db)
@@ -260,19 +302,25 @@ async def execute_bkash_payment(
                 tier=tier_enum,
                 plan_code=target_tier_str,
                 status=SubscriptionStatus.ACTIVE,
+                billing_cycle=payload.billing_cycle or "monthly",
                 monthly_token_limit=token_limit,
                 monthly_conversation_limit=max_conversations,
                 max_agents=max_agents,
                 max_websites=max_websites,
                 max_knowledge_docs=max_knowledge_docs,
                 current_period_start=now,
-                current_period_end=period_end
+                current_period_end=period_end,
+                locked_price_bdt=locked_price if is_custom_deal else 0.0,
+                locked_token_limit=token_limit if is_custom_deal else token_limit,
+                is_custom_deal=is_custom_deal,
+                deal_notes=deal_notes if is_custom_deal else None
             )
             db.add(sub)
         else:
             sub.tier = tier_enum
             sub.plan_code = target_tier_str
             sub.status = SubscriptionStatus.ACTIVE
+            sub.billing_cycle = payload.billing_cycle or "monthly"
             sub.monthly_token_limit = token_limit
             sub.monthly_conversation_limit = max_conversations
             sub.max_agents = max_agents
@@ -280,6 +328,11 @@ async def execute_bkash_payment(
             sub.max_knowledge_docs = max_knowledge_docs
             sub.current_period_start = now
             sub.current_period_end = period_end
+            if is_custom_deal:
+                sub.is_custom_deal = True
+                sub.locked_price_bdt = locked_price
+                sub.locked_token_limit = token_limit
+                sub.deal_notes = deal_notes
 
         # Auto-reactivate tenant if suspended
         t_stmt = select(Tenant).where(Tenant.id == tenant_id)
@@ -499,6 +552,7 @@ class EpsCreatePaymentRequest(BaseModel):
     customer_address: Optional[str] = "Dhaka, Bangladesh"
     coupon_code: Optional[str] = None
     frontend_url: Optional[str] = None
+    custom_config: Optional[Dict[str, Any]] = None
 
 class EpsExecutePaymentRequest(BaseModel):
     merchant_transaction_id: str
@@ -506,6 +560,7 @@ class EpsExecutePaymentRequest(BaseModel):
     billing_cycle: Optional[str] = "monthly"
     coupon_code: Optional[str] = None
     payer_email: Optional[str] = None
+    custom_config: Optional[Dict[str, Any]] = None
 
 @router.post("/eps/create")
 async def create_eps_checkout_session(
@@ -526,18 +581,42 @@ async def create_eps_checkout_session(
 
     tier_str = payload.tier.lower()
 
-    # Load dynamic plan from database
-    plan = await PricingService.get_plan_by_code(db, tier_str)
-    if not plan:
-        fallback_monthly = {"free": 0.0, "starter": 4990.0, "growth": 19990.0, "enterprise": 49990.0}
-        fallback_annual = {"free": 0.0, "starter": 4240.0 * 12, "growth": 16990.0 * 12, "enterprise": 42490.0 * 12}
-        if tier_str not in fallback_monthly:
-            raise HTTPException(status_code=400, detail="Invalid subscription tier selected")
+    if tier_str == "custom":
+        from app.services.billing.wallet_service import WalletService
+        cfg = payload.custom_config or {}
+        tokens = int(cfg.get("tokens", 1_000_000))
+        seats = int(cfg.get("seats", 2))
+        websites = int(cfg.get("websites", 1))
         is_annual = payload.billing_cycle == "annual"
-        raw_amount = fallback_annual[tier_str] if is_annual else fallback_monthly[tier_str]
+        token_rate = float(engine_cfg.get("default_per_10k_tokens_rate_bdt", 1.50))
+        annual_discount = float(engine_cfg.get("annual_discount_percentage", 15.0))
+        quote = WalletService.calculate_custom_quote(
+            tokens=tokens,
+            seats=seats,
+            websites=websites,
+            is_annual=is_annual,
+            token_rate_10k=token_rate,
+            annual_discount_percent=annual_discount
+        )
+        if cfg.get("price") is not None:
+            raw_amount = float(cfg["price"])
+        elif is_annual:
+            raw_amount = quote["annual_price_bdt"] * 12.0
+        else:
+            raw_amount = quote["monthly_price_bdt"]
     else:
-        is_annual = payload.billing_cycle == "annual"
-        raw_amount = plan.annual_price_bdt * 12 if is_annual else plan.monthly_price_bdt
+        # Load dynamic plan from database
+        plan = await PricingService.get_plan_by_code(db, tier_str)
+        if not plan:
+            fallback_monthly = {"free": 0.0, "starter": 4990.0, "growth": 19990.0, "enterprise": 49990.0}
+            fallback_annual = {"free": 0.0, "starter": 4240.0 * 12, "growth": 16990.0 * 12, "enterprise": 42490.0 * 12}
+            if tier_str not in fallback_monthly:
+                raise HTTPException(status_code=400, detail="Invalid subscription tier selected")
+            is_annual = payload.billing_cycle == "annual"
+            raw_amount = fallback_annual[tier_str] if is_annual else fallback_monthly[tier_str]
+        else:
+            is_annual = payload.billing_cycle == "annual"
+            raw_amount = plan.annual_price_bdt * 12 if is_annual else plan.monthly_price_bdt
 
     discount_amount = 0.0
     coupon_info = None
@@ -609,8 +688,6 @@ async def execute_eps_payment(
     """
     target_tier_str = payload.tier.lower()
 
-    # 1. Fetch exact plan from database
-    plan = await PricingService.get_plan_by_code(db, target_tier_str)
     tier_map = {
         "free": SubscriptionTier.FREE,
         "starter": SubscriptionTier.STARTER,
@@ -618,26 +695,45 @@ async def execute_eps_payment(
         "enterprise": SubscriptionTier.ENTERPRISE
     }
 
-    if plan:
-        token_limit = plan.monthly_token_limit
-        max_agents = plan.max_agents
-        max_websites = plan.max_websites
-        max_knowledge_docs = plan.max_knowledge_docs
-        max_conversations = plan.monthly_conversation_limit
-        tier_enum = tier_map.get(target_tier_str, SubscriptionTier.GROWTH)
+    is_custom_deal = False
+    locked_price = 0.0
+    deal_notes = None
+
+    if target_tier_str == "custom" or payload.custom_config is not None:
+        cfg = payload.custom_config or {}
+        token_limit = int(cfg.get("tokens", 1_000_000))
+        max_agents = int(cfg.get("seats", 2))
+        max_websites = int(cfg.get("websites", 1))
+        max_knowledge_docs = int(cfg.get("knowledge_docs", 50))
+        max_conversations = max(500, int(token_limit / 1000))
+        tier_enum = SubscriptionTier.GROWTH
+        is_custom_deal = True
+        locked_price = float(cfg.get("price") or 3340.0)
+        deal_notes = f"Custom Builder Deploy (EPS): {token_limit:,} tokens, {max_agents} seats, {max_websites} sites (৳{locked_price:,.2f})"
+        plan = None
     else:
-        tier_limits = {
-            "free": 50_000,
-            "starter": 500_000,
-            "growth": 2_500_000,
-            "enterprise": 10_000_000
-        }
-        token_limit = tier_limits.get(target_tier_str, 500_000)
-        tier_enum = tier_map.get(target_tier_str, SubscriptionTier.STARTER)
-        max_agents = 2
-        max_websites = 1
-        max_knowledge_docs = 10
-        max_conversations = 200
+        # 1. Fetch exact plan from database
+        plan = await PricingService.get_plan_by_code(db, target_tier_str)
+        if plan:
+            token_limit = plan.monthly_token_limit
+            max_agents = plan.max_agents
+            max_websites = plan.max_websites
+            max_knowledge_docs = plan.max_knowledge_docs
+            max_conversations = plan.monthly_conversation_limit
+            tier_enum = tier_map.get(target_tier_str, SubscriptionTier.GROWTH)
+        else:
+            tier_limits = {
+                "free": 50_000,
+                "starter": 500_000,
+                "growth": 2_500_000,
+                "enterprise": 10_000_000
+            }
+            token_limit = tier_limits.get(target_tier_str, 500_000)
+            tier_enum = tier_map.get(target_tier_str, SubscriptionTier.STARTER)
+            max_agents = 2
+            max_websites = 1
+            max_knowledge_docs = 10
+            max_conversations = 200
 
     # 2. Verify with EPS Engine
     platform_eps = await get_platform_eps_service(db)
@@ -677,19 +773,25 @@ async def execute_eps_payment(
                 tier=tier_enum,
                 plan_code=target_tier_str,
                 status=SubscriptionStatus.ACTIVE,
+                billing_cycle=payload.billing_cycle or "monthly",
                 monthly_token_limit=token_limit,
                 monthly_conversation_limit=max_conversations,
                 max_agents=max_agents,
                 max_websites=max_websites,
                 max_knowledge_docs=max_knowledge_docs,
                 current_period_start=now,
-                current_period_end=period_end
+                current_period_end=period_end,
+                locked_price_bdt=locked_price if is_custom_deal else 0.0,
+                locked_token_limit=token_limit if is_custom_deal else token_limit,
+                is_custom_deal=is_custom_deal,
+                deal_notes=deal_notes if is_custom_deal else None
             )
             db.add(sub)
         else:
             sub.tier = tier_enum
             sub.plan_code = target_tier_str
             sub.status = SubscriptionStatus.ACTIVE
+            sub.billing_cycle = payload.billing_cycle or "monthly"
             sub.monthly_token_limit = token_limit
             sub.monthly_conversation_limit = max_conversations
             sub.max_agents = max_agents
@@ -697,6 +799,11 @@ async def execute_eps_payment(
             sub.max_knowledge_docs = max_knowledge_docs
             sub.current_period_start = now
             sub.current_period_end = period_end
+            if is_custom_deal:
+                sub.is_custom_deal = True
+                sub.locked_price_bdt = locked_price
+                sub.locked_token_limit = token_limit
+                sub.deal_notes = deal_notes
 
         # Auto-reactivate tenant if suspended
         t_stmt = select(Tenant).where(Tenant.id == tenant_id)

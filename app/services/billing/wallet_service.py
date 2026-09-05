@@ -151,15 +151,18 @@ class WalletService:
         websites: int = 1,
         knowledge_docs: int = 50,
         is_annual: bool = False,
-        modules: Optional[Dict[str, bool]] = None
+        modules: Optional[Dict[str, bool]] = None,
+        token_rate_10k: float = 1.50,
+        annual_discount_percent: float = 15.0
     ) -> Dict[str, Any]:
         """
         Calculates reactive custom plan quote in Bangladeshi Taka based on selected resources.
+        Matches frontend Custom Capacity Builder formula with exact parity.
         """
         base_platform_fee = 1990.0 # Base cloud infrastructure & RAG core fee
         
-        # Tokens rate: ৳800 per 1M tokens
-        token_cost = (tokens / 1_000_000.0) * 800.0
+        # Tokens rate: based on token_rate_10k (default ৳1.50 per 10k tokens)
+        token_cost = (tokens / 10_000.0) * token_rate_10k
         
         # Extra seats beyond 2 included: ৳750/seat
         extra_seats = max(0, seats - 2)
@@ -184,10 +187,11 @@ class WalletService:
                 modules_cost += 3500.0
 
         monthly_subtotal = base_platform_fee + token_cost + seat_cost + website_cost + docs_cost + modules_cost
-        monthly_rounded = round(monthly_subtotal, -1) # Round to nearest 10
+        monthly_rounded = round(monthly_subtotal)
         
-        # Annual: 15% discount
-        annual_monthly_rate = round(monthly_rounded * 0.85, -1)
+        # Annual: discount multiplier
+        discount_mult = max(0.0, 1.0 - (annual_discount_percent / 100.0))
+        annual_monthly_rate = round(monthly_rounded * discount_mult)
         annual_total = annual_monthly_rate * 12.0
         annual_savings = (monthly_rounded * 12.0) - annual_total
 
@@ -209,3 +213,4 @@ class WalletService:
                 "modules_cost_bdt": modules_cost
             }
         }
+
